@@ -17,6 +17,8 @@ def run_command(command, cwd=None):
 
 
 def main():
+    root = Path(__file__).resolve().parent
+
     # check if cmake is available
     cmake_exe = shutil.which("cmake")
     if cmake_exe is None:
@@ -28,18 +30,21 @@ def main():
 
     system = platform.system()
     if system == "Windows":
-        configure_cmd = [cmake_exe, "-S", ".", "-B", "build", "-G", "Visual Studio 17 2022", "-A", "x64"]
         platform_name = "x64"
+        build_dir = root / "build" / platform_name
+        configure_cmd = [cmake_exe, "-S", str(root), "-B", str(build_dir), "-G", "Visual Studio 17 2022", "-A", "x64"]
     else:
-        configure_cmd = [cmake_exe, "-S", ".", "-B", "build", "-G", "Unix Makefiles"]
         platform_name = "linux"
+        build_dir = root / "build" / platform_name
+        configure_cmd = [cmake_exe, "-S", str(root), "-B", str(build_dir), "-G", "Unix Makefiles"]
 
     # create build and install directories
-    Path("build", platform_name).mkdir(parents=True, exist_ok=True)
-    Path("install", platform_name).mkdir(parents=True, exist_ok=True)
+    (root / "build" / platform_name).mkdir(parents=True, exist_ok=True)
+    (root / "build" / platform_name / "conan").mkdir(parents=True, exist_ok=True)
+    (root / "install" / platform_name).mkdir(parents=True, exist_ok=True)
 
     # configure
-    run_command(configure_cmd, cwd=".")
+    run_command(configure_cmd, cwd=str(root))
 
     print("Configure completed successfully.")
 
