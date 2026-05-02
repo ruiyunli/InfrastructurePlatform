@@ -5,7 +5,10 @@ message(STATUS "Qt5_FOUND=${Qt5_FOUND}")
 message(STATUS "Qt5_INCLUDE_DIRS=${Qt5_INCLUDE_DIRS}")
 
 # Add executable
-add_executable(${TARGET_NAME} main.cpp)
+add_executable(${TARGET_NAME} 
+    main.cpp
+    plugin_import.cpp
+)
 
 target_include_directories(${TARGET_NAME} SYSTEM PRIVATE ${Qt5_INCLUDE_DIRS})
 
