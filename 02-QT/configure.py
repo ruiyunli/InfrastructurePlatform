@@ -18,6 +18,8 @@ def run_command(command, cwd=None):
 
 def main():
     root = Path(__file__).resolve().parent
+    print(f"Working directory: {Path.cwd()}")
+    print(f"Root location: {root}")
 
     # check if cmake is available
     cmake_exe = shutil.which("cmake")
@@ -43,10 +45,19 @@ def main():
     (root / "build" / platform_name / "conan").mkdir(parents=True, exist_ok=True)
     (root / "install" / platform_name).mkdir(parents=True, exist_ok=True)
 
-    # configure
+    # configure conan
+    conan_recipe = root / "scripts" / "conanfile.py"
+    conan_profile = root / "scripts" / "conanprofile"
+    conan_outputdir = root / "build" / platform_name / "conan"
+    run_command(["conan", "install", str(conan_recipe), "--profile=" + str(conan_profile), "--output-folder=" + str(conan_outputdir)], cwd=str(root))
+
+    print("Configuration conan completed successfully.")
+
+    # configure solution
     run_command(configure_cmd, cwd=str(root))
 
-    print("Configure completed successfully.")
+    print("Configure Solution completed successfully.")
+
 
 if __name__ == "__main__":
     try:
