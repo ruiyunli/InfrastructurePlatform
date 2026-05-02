@@ -1,0 +1,99 @@
+# Qt 项目 .gitignore
+
+# Qt 生成的文件
+*.pro.user
+*.pro.user.*
+*.qbs.user
+*.qbs.user.*
+*.moc
+moc_*.cpp
+moc_*.h
+qrc_*.cpp
+ui_*.h
+*.qmlc
+*.jsc
+Makefile*
+*build-*
+*.qm
+.qmake.cache
+.qmake.stash
+
+# Qt Creator
+*.autosave
+*.creator
+*.creator.user
+*.files
+*.includes
+*.config
+*.cflags
+*.cxxflags
+
+# C++ 编译产物
+*.o
+*.obj
+*.so
+*.so.*
+*.dylib
+*.dll
+*.a
+*.lib
+*.exe
+*.out
+*.app
+
+# 调试文件
+*.dSYM/
+*.su
+*.idb
+*.pdb
+
+# 构建目录
+build/
+build-*/
+debug/
+release/
+Debug/
+Release/
+x64/
+x86/
+.vs/
+
+# CMake
+CMakeLists.txt.user
+CMakeCache.txt
+CMakeFiles/
+cmake_install.cmake
+install_manifest.txt
+compile_commands.json
+CTestTestfile.cmake
+_deps/
+
+# 安装目录
+install/
+
+# IDE 相关
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+.DS_Store
+
+# 临时文件
+*.log
+*.tmp
+*.temp
+*.bak
+*.old
+
+# Qt 资源
+*.qrc.depends
+*.qrc.cpp
+
+# MOC 文件
+moc_predefs.h
+
+# 其他
+*.user
+.qmake.cache
+.qmake.stash
