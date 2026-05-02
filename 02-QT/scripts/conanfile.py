@@ -7,7 +7,7 @@ class AppRecipe(ConanFile):
     generators = "CMakeDeps", "CMakeToolchain"
 
     def requirements(self):
-        self.requires("qt/5.15.18")
+        self.requires("qt/5.15.18", options={"shared": False})
         self.requires("sqlite3/3.51.0")
 
     def layout(self):
