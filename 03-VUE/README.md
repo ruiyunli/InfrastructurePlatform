@@ -91,14 +91,29 @@
 - MSVC（Windows）或 GCC/Clang
 - vcpkg（用于安装 OpenSSL）
 
+> **关于 vcpkg**：本项目 backend/vcpkg 目录包含完整的 vcpkg 源码，首次使用时需要运行 bootstrap 脚本生成 vcpkg.exe 可执行文件。vcpkg 是微软维护的 C/C++ 包管理器，用于管理依赖库如 OpenSSL。
+
 ### 1. 构建后端
 
 ```bash
 # 进入后端目录
 cd backend
 
+# 如果 vcpkg.exe 不存在，需要先生成（首次使用）
+# Windows:
+.\vcpkg\bootstrap-vcpkg.bat
+# Linux/Mac:
+./vcpkg/bootstrap-vcpkg.sh
+
+# 首次使用需要集成 vcpkg（只需一次）
+./vcpkg/vcpkg.exe integrate install
+
+# 安装 OpenSSL（如果尚未安装）
+./vcpkg/vcpkg.exe install openssl
+
 # 配置 CMake（首次构建）
-cmake -B build -S . -DCMAKE_BUILD_TYPE=Release
+# 使用绝对路径指定 vcpkg 工具链文件
+cmake -B build -S . -DCMAKE_BUILD_TYPE=Release -DCMAKE_TOOLCHAIN_FILE="$(pwd)/vcpkg/scripts/buildsystems/vcpkg.cmake"
 
 # 编译
 cmake --build build --config Release
