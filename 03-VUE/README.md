@@ -91,7 +91,15 @@
 - MSVC（Windows）或 GCC/Clang
 - vcpkg（用于安装 OpenSSL）
 
-> **关于 vcpkg**：本项目 backend/vcpkg 目录包含完整的 vcpkg 源码，首次使用时需要运行 bootstrap 脚本生成 vcpkg.exe 可执行文件。vcpkg 是微软维护的 C/C++ 包管理器，用于管理依赖库如 OpenSSL。
+> **关于 vcpkg**：vcpkg 是微软维护的 C/C++ 包管理器，用于管理依赖库如 OpenSSL。
+>
+> 如果 backend/vcpkg 目录不存在或需要更新，可以使用以下命令下载指定稳定版本：
+> ```bash
+> # 下载稳定版本 2026.04.27（推荐）
+> git clone -b 2026.04.27 https://github.com/microsoft/vcpkg.git backend/vcpkg
+> ```
+>
+> 首次使用后，需要运行 bootstrap 脚本生成 vcpkg.exe 可执行文件。
 
 ### 1. 构建后端
 
@@ -99,28 +107,42 @@
 # 进入后端目录
 cd backend
 
-# 如果 vcpkg.exe 不存在，需要先生成（首次使用）
+# 如果 backend/vcpkg 目录不存在，下载 vcpkg 源码（指定稳定版本）
+git clone -b 2026.04.27 https://github.com/microsoft/vcpkg.git backend/vcpkg
+
+# 生成 vcpkg 可执行文件
 # Windows:
-.\vcpkg\bootstrap-vcpkg.bat
+.\backend\vcpkg\bootstrap-vcpkg.bat
 # Linux/Mac:
-./vcpkg/bootstrap-vcpkg.sh
+./backend/vcpkg/bootstrap-vcpkg.sh
 
-# 首次使用需要集成 vcpkg（只需一次）
-./vcpkg/vcpkg.exe integrate install
+# 集成 vcpkg 到系统（只需一次）
+# Windows:
+.\backend\vcpkg\vcpkg.exe integrate install
+# Linux/Mac:
+./backend/vcpkg/vcpkg integrate install
 
-# 安装 OpenSSL（如果尚未安装）
-./vcpkg/vcpkg.exe install openssl
+# 安装 OpenSSL
+# Windows:
+.\backend\vcpkg\vcpkg.exe install openssl:x64-windows
+# Linux/Mac:
+./backend/vcpkg/vcpkg install openssl:x64-linux
 
-# 配置 CMake（首次构建）
-# 使用绝对路径指定 vcpkg 工具链文件
-cmake -B build -S . -DCMAKE_BUILD_TYPE=Release -DCMAKE_TOOLCHAIN_FILE="$(pwd)/vcpkg/scripts/buildsystems/vcpkg.cmake"
+# 配置 CMake
+# Windows:
+cmake -B build\x64 -S . -DCMAKE_BUILD_TYPE=Release -DCMAKE_TOOLCHAIN_FILE="$(pwd)/vcpkg/scripts/buildsystems/vcpkg.cmake"
+# Linux/Mac:
+cmake -B build/linux -S . -DCMAKE_BUILD_TYPE=Release -DCMAKE_TOOLCHAIN_FILE="$(pwd)/vcpkg/scripts/buildsystems/vcpkg.cmake" -G "Unix Makefiles"
 
 # 编译
-cmake --build build --config Release
+cmake --build build\x64 --config Release
 
 # 运行后端服务器
-cd build/Release
+cd build/x64/Release
+# Windows:
 ./server.exe
+# Linux/Mac:
+./server
 ```
 
 后端服务启动在 http://localhost:8080
