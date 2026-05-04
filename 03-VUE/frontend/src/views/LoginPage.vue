@@ -77,87 +77,167 @@ const handleCancel = () => {
   justify-content: center;
   align-items: center;
   min-height: 100vh;
-  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  background: linear-gradient(135deg, #1a1a2e 0%, #16213e 50%, #0f3460 100%);
   position: relative;
+  overflow: hidden;
+}
+
+/* 背景装饰 */
+.login-container::before {
+  content: '';
+  position: absolute;
+  top: -50%;
+  left: -50%;
+  width: 200%;
+  height: 200%;
+  background: radial-gradient(circle, rgba(79, 172, 254, 0.1) 0%, transparent 50%);
+  animation: rotateBg 20s linear infinite;
+}
+
+.login-container::after {
+  content: '';
+  position: absolute;
+  bottom: -30%;
+  right: -30%;
+  width: 100%;
+  height: 100%;
+  background: radial-gradient(circle, rgba(0, 206, 201, 0.08) 0%, transparent 50%);
+  animation: pulseBg 8s ease-in-out infinite;
+}
+
+@keyframes rotateBg {
+  from { transform: rotate(0deg); }
+  to { transform: rotate(360deg); }
+}
+
+@keyframes pulseBg {
+  0%, 100% { transform: scale(1); opacity: 0.5; }
+  50% { transform: scale(1.1); opacity: 0.8; }
 }
 
 .back-btn {
   position: absolute;
-  top: 20px;
-  left: 20px;
+  top: 24px;
+  left: 24px;
   display: flex;
   align-items: center;
   gap: 8px;
-  color: white;
-  font-size: 16px;
+  color: rgba(255, 255, 255, 0.7);
+  font-size: 14px;
   cursor: pointer;
   padding: 10px 16px;
   border-radius: 8px;
-  background: rgba(255, 255, 255, 0.2);
-  transition: background 0.3s;
+  background: rgba(255, 255, 255, 0.1);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  transition: all 0.3s;
+  z-index: 10;
 }
 
 .back-btn:hover {
-  background: rgba(255, 255, 255, 0.3);
+  background: rgba(255, 255, 255, 0.15);
+  color: white;
+  transform: translateX(-4px);
 }
 
 .back-icon {
-  font-size: 18px;
+  font-size: 16px;
+  transition: transform 0.3s;
+}
+
+.back-btn:hover .back-icon {
+  transform: translateX(-4px);
 }
 
 .login-box {
-  background: white;
-  padding: 40px;
-  border-radius: 10px;
-  box-shadow: 0 10px 25px rgba(0, 0, 0, 0.2);
+  background: rgba(255, 255, 255, 0.95);
+  padding: 48px 40px;
+  border-radius: 16px;
+  box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.4);
   width: 100%;
   max-width: 400px;
+  position: relative;
+  z-index: 10;
+  backdrop-filter: blur(10px);
+}
+
+.login-box::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 4px;
+  background: linear-gradient(90deg, #4facfe 0%, #00f2fe 100%);
+  border-radius: 16px 16px 0 0;
 }
 
 h1 {
   text-align: center;
-  margin-bottom: 30px;
-  color: #333;
+  margin-bottom: 32px;
+  color: #1a1a2e;
+  font-size: 28px;
+  font-weight: 600;
+  letter-spacing: 2px;
 }
 
 .form-group {
-  margin-bottom: 20px;
+  margin-bottom: 24px;
 }
 
 input {
   width: 100%;
-  padding: 12px;
-  border: 1px solid #ddd;
-  border-radius: 5px;
-  font-size: 14px;
+  padding: 14px 16px;
+  border: 2px solid #e8e8e8;
+  border-radius: 10px;
+  font-size: 15px;
   box-sizing: border-box;
+  transition: all 0.3s;
+  background: #f8f9fa;
 }
 
 input:focus {
   outline: none;
-  border-color: #667eea;
+  border-color: #4facfe;
+  background: white;
+  box-shadow: 0 0 0 4px rgba(79, 172, 254, 0.15);
+}
+
+input::placeholder {
+  color: #999;
 }
 
 .error-message {
   color: #e74c3c;
-  font-size: 14px;
-  margin-bottom: 15px;
+  font-size: 13px;
+  margin-bottom: 20px;
   text-align: center;
+  padding: 10px;
+  background: rgba(231, 76, 60, 0.1);
+  border-radius: 8px;
+  border: 1px solid rgba(231, 76, 60, 0.2);
 }
 
 .login-button {
   width: 100%;
-  padding: 12px;
-  background: #667eea;
+  padding: 14px;
+  background: linear-gradient(135deg, #4facfe 0%, #00f2fe 100%);
   color: white;
   border: none;
-  border-radius: 5px;
+  border-radius: 10px;
   font-size: 16px;
+  font-weight: 600;
   cursor: pointer;
-  transition: background 0.3s;
+  transition: all 0.3s;
+  letter-spacing: 1px;
+  margin-top: 8px;
 }
 
 .login-button:hover {
-  background: #5568d3;
+  transform: translateY(-2px);
+  box-shadow: 0 8px 20px rgba(79, 172, 254, 0.4);
+}
+
+.login-button:active {
+  transform: translateY(0);
 }
 </style>

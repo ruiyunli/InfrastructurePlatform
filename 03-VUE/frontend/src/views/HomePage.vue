@@ -114,18 +114,34 @@ onMounted(() => {
 <style scoped>
 .home-page {
   min-height: 100vh;
+  height: 100vh;
   background-size: cover;
   background-position: center;
   background-repeat: no-repeat;
   display: flex;
   flex-direction: column;
+  position: relative;
+}
+
+/* 暗色遮罩层 */
+.home-page::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: rgba(0, 0, 0, 0.3);
+  z-index: 1;
 }
 
 .header {
-  padding: 20px;
+  padding: 24px 32px;
   display: flex;
   justify-content: flex-end;
   align-items: center;
+  position: relative;
+  z-index: 10;
 }
 
 .user-dropdown {
@@ -135,54 +151,92 @@ onMounted(() => {
 .user-btn {
   display: flex;
   align-items: center;
-  gap: 8px;
-  padding: 8px 16px;
-  background: rgba(255, 255, 255, 0.9);
-  color: #333;
+  gap: 10px;
+  padding: 10px 20px;
+  background: rgba(255, 255, 255, 0.95);
+  color: #1a1a2e;
   border: none;
-  border-radius: 4px;
+  border-radius: 25px;
   font-size: 14px;
+  font-weight: 500;
   cursor: pointer;
   transition: all 0.3s;
+  box-shadow: 0 2px 10px rgba(0, 0, 0, 0.1);
 }
 
 .user-btn:hover {
   background: white;
+  transform: translateY(-2px);
+  box-shadow: 0 4px 15px rgba(0, 0, 0, 0.2);
 }
 
 .arrow {
   font-size: 10px;
   color: #666;
+  transition: transform 0.3s;
+}
+
+.user-dropdown:hover .arrow {
+  transform: rotate(180deg);
 }
 
 .dropdown-menu {
   position: absolute;
-  top: 100%;
+  top: calc(100% + 8px);
   right: 0;
-  margin-top: 8px;
   background: white;
-  border-radius: 4px;
-  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.15);
+  border-radius: 12px;
+  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.15);
   overflow: hidden;
   z-index: 100;
-  min-width: 120px;
+  min-width: 140px;
+  opacity: 0;
+  visibility: hidden;
+  transform: translateY(-10px);
+  transition: all 0.3s;
+}
+
+.user-dropdown:hover .dropdown-menu,
+.dropdown-menu:hover {
+  opacity: 1;
+  visibility: visible;
+  transform: translateY(0);
 }
 
 .dropdown-item {
   width: 100%;
-  padding: 10px 16px;
+  padding: 12px 20px;
   background: none;
   border: none;
   text-align: left;
   cursor: pointer;
   font-size: 14px;
   color: #333;
-  transition: background 0.2s;
+  transition: all 0.2s;
 }
 
 .dropdown-item:hover {
-  background: #f5f5f5;
-  color: #e74c3c;
+  background: linear-gradient(135deg, #ff6b6b 0%, #ee5a5a 100%);
+  color: white;
+}
+
+.login-btn {
+  padding: 10px 24px;
+  background: rgba(255, 255, 255, 0.95);
+  color: #1a1a2e;
+  border: none;
+  border-radius: 25px;
+  font-size: 14px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.3s;
+  box-shadow: 0 2px 10px rgba(0, 0, 0, 0.1);
+}
+
+.login-btn:hover {
+  background: white;
+  transform: translateY(-2px);
+  box-shadow: 0 4px 15px rgba(0, 0, 0, 0.2);
 }
 
 .content {
@@ -191,33 +245,37 @@ onMounted(() => {
   justify-content: center;
   align-items: center;
   padding: 20px;
+  position: relative;
+  z-index: 10;
 }
 
 .search-container {
   width: 100%;
-  max-width: 600px;
+  max-width: 680px;
   position: relative;
 }
 
 .search-box {
   width: 100%;
-  padding: 16px 20px;
+  padding: 20px 28px;
   font-size: 18px;
   border: none;
-  border-radius: 24px;
-  background: white;
-  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.2);
+  border-radius: 50px;
+  background: rgba(255, 255, 255, 0.95);
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.15);
   cursor: pointer;
   transition: all 0.3s;
 }
 
 .search-box:hover {
-  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
+  box-shadow: 0 6px 30px rgba(0, 0, 0, 0.25);
+  transform: scale(1.01);
 }
 
 .search-box:focus {
   outline: none;
-  box-shadow: 0 6px 16px rgba(0, 0, 0, 0.4);
+  box-shadow: 0 8px 40px rgba(0, 0, 0, 0.3);
+  transform: scale(1.02);
 }
 
 .egg-message {
@@ -225,14 +283,16 @@ onMounted(() => {
   top: 100%;
   left: 50%;
   transform: translateX(-50%);
-  margin-top: 20px;
-  padding: 15px 30px;
-  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  margin-top: 24px;
+  padding: 18px 36px;
+  background: linear-gradient(135deg, #4facfe 0%, #00f2fe 100%);
   color: white;
-  border-radius: 10px;
+  border-radius: 16px;
   font-size: 16px;
+  font-weight: 500;
   animation: fadeIn 0.3s;
   white-space: nowrap;
+  box-shadow: 0 10px 30px rgba(79, 172, 254, 0.4);
 }
 
 @keyframes fadeIn {
