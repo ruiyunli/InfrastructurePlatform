@@ -69,18 +69,15 @@ const handleMenuMouseLeave = () => {
 
 // 获取背景图片
 const fetchBingImage = async () => {
-  // 默认使用 Unsplash 的精美背景图
-  // 如需使用 Bing 每日图片，需要后端提供代理接口
-  const backgrounds = [
-    'https://images.unsplash.com/photo-1506905925346-21bd4a458e7a?w=1920',
-    'https://images.unsplash.com/photo-1469474968028-56623f02e42e?w=1920',
-    'https://images.unsplash.com/photo-1426604966848-d7adac402bff?w=1920',
-    'https://images.unsplash.com/photo-1472214103451-9374bd1c798e?w=1920',
-    'https://images.unsplash.com/photo-1470071459604-3b5ec3a7fe05?w=1920',
-    'https://images.unsplash.com/photo-1441974231531-c6227db76b6e?w=1920'
-  ]
-  const randomIndex = Math.floor(Math.random() * backgrounds.length)
-  bingImageUrl.value = backgrounds[randomIndex]
+  try {
+    const response = await fetch('http://localhost:8080/api/background')
+    if (response.ok) {
+      const blob = await response.blob()
+      bingImageUrl.value = URL.createObjectURL(blob)
+    }
+  } catch (error) {
+    console.error('获取背景图失败:', error)
+  }
 }
 
 // 点击搜索框显示彩蛋

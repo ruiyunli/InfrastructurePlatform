@@ -44,6 +44,7 @@ def main():
 
     # create build and install directories
     (root / "build" / platform_name).mkdir(parents=True, exist_ok=True)
+    (root / "install" / platform_name).mkdir(parents=True, exist_ok=True)
 
     # configure solution
     run_command(configure_cmd, cwd=str(root))
