@@ -26,11 +26,15 @@ api.interceptors.response.use(
   },
   error => {
     if (error.response && error.response.status === 401) {
-      // 清除本地存储
-      localStorage.removeItem('token')
-      localStorage.removeItem('username')
-      // 跳转到登录页
-      window.location.href = '/login'
+      // 排除登录接口的401错误（登录失败不需要跳转）
+      const isLoginRequest = error.config?.url?.includes('/api/login')
+      if (!isLoginRequest) {
+        // 清除本地存储
+        localStorage.removeItem('token')
+        localStorage.removeItem('username')
+        // 跳转到登录页
+        window.location.href = '/login'
+      }
     }
     return Promise.reject(error)
   }

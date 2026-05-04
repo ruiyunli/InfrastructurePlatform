@@ -13,6 +13,7 @@
             type="text"
             placeholder="用户名"
             required
+            @input="errorMessage = ''"
           />
         </div>
         <div class="form-group">
@@ -21,6 +22,7 @@
             type="password"
             placeholder="密码"
             required
+            @input="errorMessage = ''"
           />
         </div>
         <div v-if="errorMessage" class="error-message">
