@@ -67,19 +67,20 @@ const handleMenuMouseLeave = () => {
   }, 150)
 }
 
-// 获取必应每日图片
+// 获取背景图片
 const fetchBingImage = async () => {
-  try {
-    const response = await fetch('https://www.bing.com/HPImageArchive.aspx?format=js&idx=0&n=1&mkt=zh-CN')
-    const data = await response.json()
-    if (data.images && data.images[0]) {
-      bingImageUrl.value = `https://www.bing.com${data.images[0].url}`
-    }
-  } catch (error) {
-    console.error('获取必应图片失败:', error)
-    // 使用默认背景
-    bingImageUrl.value = 'https://images.unsplash.com/photo-1506905925346-21bd4a458e7a?w=1920'
-  }
+  // 默认使用 Unsplash 的精美背景图
+  // 如需使用 Bing 每日图片，需要后端提供代理接口
+  const backgrounds = [
+    'https://images.unsplash.com/photo-1506905925346-21bd4a458e7a?w=1920',
+    'https://images.unsplash.com/photo-1469474968028-56623f02e42e?w=1920',
+    'https://images.unsplash.com/photo-1426604966848-d7adac402bff?w=1920',
+    'https://images.unsplash.com/photo-1472214103451-9374bd1c798e?w=1920',
+    'https://images.unsplash.com/photo-1470071459604-3b5ec3a7fe05?w=1920',
+    'https://images.unsplash.com/photo-1441974231531-c6227db76b6e?w=1920'
+  ]
+  const randomIndex = Math.floor(Math.random() * backgrounds.length)
+  bingImageUrl.value = backgrounds[randomIndex]
 }
 
 // 点击搜索框显示彩蛋

@@ -22,14 +22,13 @@ const router = createRouter({
 })
 
 // 导航守卫：已登录访问/login自动跳转/
-router.beforeEach((to, from, next) => {
+router.beforeEach((to, from) => {
   const userStore = useUserStore()
 
   if (to.path === '/login' && userStore.isLoggedIn) {
-    next('/')
-  } else {
-    next()
+    return '/'
   }
+  return true
 })
 
 export default router
