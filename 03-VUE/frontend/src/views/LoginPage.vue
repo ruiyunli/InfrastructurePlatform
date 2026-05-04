@@ -1,5 +1,9 @@
 <template>
   <div class="login-container">
+    <div class="back-btn" @click="handleCancel">
+      <span class="back-icon">←</span>
+      <span>返回</span>
+    </div>
     <div class="login-box">
       <h1>登录</h1>
       <form @submit.prevent="handleLogin">
@@ -59,6 +63,10 @@ const handleLogin = async () => {
     errorMessage.value = error.response?.data?.message || '登录失败，请检查用户名和密码'
   }
 }
+
+const handleCancel = () => {
+  router.push('/')
+}
 </script>
 
 <style scoped>
@@ -68,6 +76,31 @@ const handleLogin = async () => {
   align-items: center;
   min-height: 100vh;
   background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  position: relative;
+}
+
+.back-btn {
+  position: absolute;
+  top: 20px;
+  left: 20px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  color: white;
+  font-size: 16px;
+  cursor: pointer;
+  padding: 10px 16px;
+  border-radius: 8px;
+  background: rgba(255, 255, 255, 0.2);
+  transition: background 0.3s;
+}
+
+.back-btn:hover {
+  background: rgba(255, 255, 255, 0.3);
+}
+
+.back-icon {
+  font-size: 18px;
 }
 
 .login-box {
