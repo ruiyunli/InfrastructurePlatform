@@ -5,11 +5,18 @@
 #include <json.hpp>
 #include <random>
 #include <filesystem>
+#include <windows.h>
 #include "users.hpp"
 #include "auth.hpp"
 
 using json = nlohmann::json;
 namespace fs = std::filesystem;
+
+// 设置控制台为 UTF-8 编码
+void setConsoleUtf8() {
+    SetConsoleOutputCP(CP_UTF8);
+    SetConsoleCP(CP_UTF8);
+}
 
 // 服务器启动时随机选择的背景图
 std::string currentBackgroundPath;
@@ -55,6 +62,9 @@ void initBackground() {
 }
 
 int main() {
+    // 设置控制台为 UTF-8 编码
+    setConsoleUtf8();
+
     // 初始化背景图
     initBackground();
 

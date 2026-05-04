@@ -20,7 +20,7 @@
           type="text"
           placeholder="搜索..."
           class="search-box"
-          @click="showEgg"
+          @keyup.enter="showEgg"
         />
         <div v-if="showEggMessage" class="egg-message">
           🎉 这是一个彩蛋！你找到了隐藏的惊喜！
