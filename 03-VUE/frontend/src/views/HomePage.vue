@@ -1,9 +1,14 @@
 <template>
   <div class="home-page" :style="{ backgroundImage: `url(${bingImageUrl})` }">
     <div class="header">
-      <div v-if="userStore.isLoggedIn" class="user-info">
-        <span class="username">{{ userStore.username }}</span>
-        <button @click="handleLogout" class="logout-btn">注销</button>
+      <div v-if="userStore.isLoggedIn" class="user-dropdown" @mouseenter="handleMouseEnter" @mouseleave="handleMouseLeave">
+        <button class="user-btn">
+          <span>{{ userStore.username }}</span>
+          <span class="arrow">▼</span>
+        </button>
+        <div v-show="showDropdown" class="dropdown-menu" @mouseenter="handleMenuMouseEnter" @mouseleave="handleMenuMouseLeave">
+          <button @click="handleLogout" class="dropdown-item">退出登录</button>
+        </div>
       </div>
       <button v-else @click="goToLogin" class="login-btn">登录</button>
     </div>
@@ -37,6 +42,30 @@ const userStore = useUserStore()
 const bingImageUrl = ref('')
 const searchQuery = ref('')
 const showEggMessage = ref(false)
+const showDropdown = ref(false)
+let hideDropdownTimer = null
+
+const handleMouseEnter = () => {
+  clearTimeout(hideDropdownTimer)
+  showDropdown.value = true
+}
+
+const handleMouseLeave = () => {
+  hideDropdownTimer = setTimeout(() => {
+    showDropdown.value = false
+  }, 150)
+}
+
+const handleMenuMouseEnter = () => {
+  clearTimeout(hideDropdownTimer)
+  showDropdown.value = true
+}
+
+const handleMenuMouseLeave = () => {
+  hideDropdownTimer = setTimeout(() => {
+    showDropdown.value = false
+  }, 150)
+}
 
 // 获取必应每日图片
 const fetchBingImage = async () => {
@@ -66,15 +95,15 @@ const goToLogin = () => {
   router.push('/login')
 }
 
-// 处理注销
+// 处理退出登录
 const handleLogout = async () => {
+  showDropdown.value = false
   try {
     await logout()
   } catch (error) {
-    console.error('注销失败:', error)
+    console.error('退出登录失败:', error)
   }
   userStore.logout()
-  router.push('/login')
 }
 
 onMounted(() => {
@@ -99,23 +128,16 @@ onMounted(() => {
   align-items: center;
 }
 
-.user-info {
+.user-dropdown {
+  position: relative;
+}
+
+.user-btn {
   display: flex;
   align-items: center;
-  gap: 15px;
-}
-
-.username {
-  color: white;
-  font-size: 16px;
-  font-weight: 500;
-  text-shadow: 1px 1px 2px rgba(0, 0, 0, 0.5);
-}
-
-.logout-btn,
-.login-btn {
-  padding: 8px 20px;
-  background: white;
+  gap: 8px;
+  padding: 8px 16px;
+  background: rgba(255, 255, 255, 0.9);
   color: #333;
   border: none;
   border-radius: 4px;
@@ -124,10 +146,43 @@ onMounted(() => {
   transition: all 0.3s;
 }
 
-.logout-btn:hover,
-.login-btn:hover {
-  background: #f0f0f0;
-  transform: translateY(-1px);
+.user-btn:hover {
+  background: white;
+}
+
+.arrow {
+  font-size: 10px;
+  color: #666;
+}
+
+.dropdown-menu {
+  position: absolute;
+  top: 100%;
+  right: 0;
+  margin-top: 8px;
+  background: white;
+  border-radius: 4px;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.15);
+  overflow: hidden;
+  z-index: 100;
+  min-width: 120px;
+}
+
+.dropdown-item {
+  width: 100%;
+  padding: 10px 16px;
+  background: none;
+  border: none;
+  text-align: left;
+  cursor: pointer;
+  font-size: 14px;
+  color: #333;
+  transition: background 0.2s;
+}
+
+.dropdown-item:hover {
+  background: #f5f5f5;
+  color: #e74c3c;
 }
 
 .content {
