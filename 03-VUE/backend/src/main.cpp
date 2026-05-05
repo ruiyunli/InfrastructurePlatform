@@ -6,9 +6,8 @@
 #include <random>
 #include <filesystem>
 #include <windows.h>
-#include "users.hpp"
-#include "auth.hpp"
 #include "service/backgroudmanager.h"
+#include "service/authservice.h"
 
 using json = nlohmann::json;
 namespace fs = std::filesystem;
@@ -22,6 +21,9 @@ void setConsoleUtf8() {
 int main() {
     // 设置控制台为 UTF-8 编码
     setConsoleUtf8();
+
+    // 初始化认证服务
+    AuthService authService("my_secret_key_2026");
 
     // 初始化背景图管理器
     BackgroundManager bgManager;
@@ -45,15 +47,14 @@ int main() {
     });
 
     // POST /api/login - 登录接口
-    svr.Post("/api/login", [](const httplib::Request& req, httplib::Response& res) {
+    svr.Post("/api/login", [&](const httplib::Request& req, httplib::Response& res) {
         try {
             auto body = json::parse(req.body);
             std::string username = body["username"];
             std::string password = body["password"];
 
-            auto user = findUser(username, password);
-            if (user.has_value()) {
-                std::string token = generateToken(username);
+            if (authService.verifyUser(username, password)) {
+                std::string token = authService.generateToken(username);
                 json response = {
                     {"success", true},
                     {"token", token},
@@ -88,7 +89,7 @@ int main() {
     });
 
     // GET /api/verify - 验证token接口
-    svr.Get("/api/verify", [](const httplib::Request& req, httplib::Response& res) {
+    svr.Get("/api/verify", [&](const httplib::Request& req, httplib::Response& res) {
         try {
             std::string auth_header = req.get_header_value("Authorization");
             if (auth_header.empty() || auth_header.substr(0, 7) != "Bearer ") {
@@ -102,7 +103,7 @@ int main() {
             }
 
             std::string token = auth_header.substr(7);
-            std::string username = verifyToken(token);
+            std::string username = authService.verifyToken(token);
 
             json response = {
                 {"success", true},
