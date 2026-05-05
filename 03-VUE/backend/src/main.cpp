@@ -8,6 +8,7 @@
 #include <windows.h>
 #include "users.hpp"
 #include "auth.hpp"
+#include "service/backgroudmanager.h"
 
 using json = nlohmann::json;
 namespace fs = std::filesystem;
@@ -18,55 +19,13 @@ void setConsoleUtf8() {
     SetConsoleCP(CP_UTF8);
 }
 
-// 服务器启动时随机选择的背景图
-std::string currentBackgroundPath;
-std::string currentContentType;
-
-// 获取所有背景图文件
-std::vector<std::string> getBackgroundImages() {
-    std::vector<std::string> images;
-    std::string backgroundsPath = "./backgrounds";
-
-    if (fs::exists(backgroundsPath) && fs::is_directory(backgroundsPath)) {
-        for (const auto& entry : fs::directory_iterator(backgroundsPath)) {
-            if (entry.is_regular_file()) {
-                std::string ext = entry.path().extension().string();
-                if (ext == ".jpg" || ext == ".jpeg" || ext == ".png" || ext == ".webp") {
-                    images.push_back(entry.path().string());
-                }
-            }
-        }
-    }
-    return images;
-}
-
-// 初始化背景图 - 服务器启动时调用一次
-void initBackground() {
-    auto images = getBackgroundImages();
-    if (!images.empty()) {
-        std::random_device rd;
-        std::mt19937 gen(rd());
-        std::uniform_int_distribution<> dis(0, images.size() - 1);
-        int index = dis(gen);
-
-        currentBackgroundPath = images[index];
-        std::string ext = fs::path(currentBackgroundPath).extension().string();
-        currentContentType = "image/jpeg";
-        if (ext == ".png") currentContentType = "image/png";
-        else if (ext == ".webp") currentContentType = "image/webp";
-
-        std::cout << "当前背景图: " << currentBackgroundPath << std::endl;
-    } else {
-        std::cout << "警告: backgrounds 目录没有找到图片文件" << std::endl;
-    }
-}
-
 int main() {
     // 设置控制台为 UTF-8 编码
     setConsoleUtf8();
 
-    // 初始化背景图
-    initBackground();
+    // 初始化背景图管理器
+    BackgroundManager bgManager;
+    bgManager.initialize();
 
     httplib::Server svr;
 
@@ -161,8 +120,11 @@ int main() {
     });
 
     // GET /api/background - 获取背景图接口
-    svr.Get("/api/background", [](const httplib::Request& req, httplib::Response& res) {
-        if (currentBackgroundPath.empty()) {
+    svr.Get("/api/background", [&](const httplib::Request& req, httplib::Response& res) {
+        std::string imageData;
+        std::string contentType;
+
+        if (!bgManager.serveImage(imageData, contentType)) {
             json response = {
                 {"success", false},
                 {"message", "没有可用的背景图"}
@@ -172,24 +134,8 @@ int main() {
             return;
         }
 
-        // 读取图片文件
-        std::ifstream file(currentBackgroundPath, std::ios::binary);
-        if (!file) {
-            json response = {
-                {"success", false},
-                {"message", "读取图片失败"}
-            };
-            res.status = 500;
-            res.set_content(response.dump(), "application/json");
-            return;
-        }
-
-        std::stringstream buffer;
-        buffer << file.rdbuf();
-        std::string imageData = buffer.str();
-
-        res.set_header("Content-Type", currentContentType);
-        res.set_content(imageData, currentContentType);
+        res.set_header("Content-Type", contentType);
+        res.set_content(imageData, contentType);
     });
 
     // 设置静态文件目录用于背景图
