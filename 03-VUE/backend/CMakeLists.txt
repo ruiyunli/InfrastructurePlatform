@@ -44,7 +44,7 @@ if(WIN32)
     target_link_libraries(${TARGET_NAME} ws2_32)
 
     # 设置 Visual Studio 启动项目
-    set_property(TARGET ${TARGET_NAME} PROPERTY VS_STARTUP_PROJECT TRUE)
+    set_property(DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR} PROPERTY VS_STARTUP_PROJECT ${TARGET_NAME})
 
     # 设置调试属性
     set_property(TARGET ${TARGET_NAME} PROPERTY VS_DEBUGGER_COMMAND "${INSTALL_DIR}/${TARGET_NAME}.exe")
