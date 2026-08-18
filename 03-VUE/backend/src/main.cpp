@@ -1,20 +1,14 @@
 #include <httplib.h>
 #include <iostream>
-#include <fstream>
-#include <sstream>
-#include <nlohmann/json.hpp>
-#include <random>
-#include <filesystem>
 #include <locale>
+#include <clocale>
 #include "service/backgroudmanager.h"
 #include "service/authservice.h"
+#include "router/ApiRouter.h"
 
 #ifdef _WIN32
 #include <windows.h>
 #endif
-
-using json = nlohmann::json;
-namespace fs = std::filesystem;
 
 // 设置控制台为 UTF-8 编码（跨平台）
 void setConsoleUtf8() {
@@ -27,13 +21,10 @@ void setConsoleUtf8() {
 }
 
 int main() {
-    // 设置控制台为 UTF-8 编码
     setConsoleUtf8();
 
-    // 初始化认证服务
     AuthService authService("my_secret_key_2026", "users.json");
 
-    // 初始化背景图管理器
     BackgroundManager bgManager;
     bgManager.initialize();
 
@@ -46,7 +37,6 @@ int main() {
         res.set_header("Access-Control-Allow-Headers", "Content-Type, Authorization");
         res.set_header("Access-Control-Allow-Credentials", "true");
 
-        // 处理OPTIONS预检请求
         if (req.method == "OPTIONS") {
             res.status = 204;
             return httplib::Server::HandlerResponse::Handled;
@@ -54,101 +44,8 @@ int main() {
         return httplib::Server::HandlerResponse::Unhandled;
     });
 
-    // POST /api/login - 登录接口
-    svr.Post("/api/login", [&](const httplib::Request& req, httplib::Response& res) {
-        try {
-            auto body = json::parse(req.body);
-            std::string username = body["username"];
-            std::string password = body["password"];
-
-            if (authService.verifyUser(username, password)) {
-                std::string token = authService.generateToken(username);
-                json response = {
-                    {"success", true},
-                    {"token", token},
-                    {"username", username}
-                };
-                res.set_content(response.dump(), "application/json");
-            } else {
-                json response = {
-                    {"success", false},
-                    {"message", "用户名或密码错误"}
-                };
-                res.status = 401;
-                res.set_content(response.dump(), "application/json");
-            }
-        } catch (const std::exception& e) {
-            json response = {
-                {"success", false},
-                {"message", "请求格式错误"}
-            };
-            res.status = 400;
-            res.set_content(response.dump(), "application/json");
-        }
-    });
-
-    // POST /api/logout - 注销接口
-    svr.Post("/api/logout", [](const httplib::Request& req, httplib::Response& res) {
-        json response = {
-            {"success", true},
-            {"message", "注销成功"}
-        };
-        res.set_content(response.dump(), "application/json");
-    });
-
-    // GET /api/verify - 验证token接口
-    svr.Get("/api/verify", [&](const httplib::Request& req, httplib::Response& res) {
-        try {
-            std::string auth_header = req.get_header_value("Authorization");
-            if (auth_header.empty() || auth_header.substr(0, 7) != "Bearer ") {
-                json response = {
-                    {"success", false},
-                    {"message", "未提供token"}
-                };
-                res.status = 401;
-                res.set_content(response.dump(), "application/json");
-                return;
-            }
-
-            std::string token = auth_header.substr(7);
-            std::string username = authService.verifyToken(token);
-
-            json response = {
-                {"success", true},
-                {"username", username}
-            };
-            res.set_content(response.dump(), "application/json");
-        } catch (const std::exception& e) {
-            json response = {
-                {"success", false},
-                {"message", "token无效或已过期"}
-            };
-            res.status = 401;
-            res.set_content(response.dump(), "application/json");
-        }
-    });
-
-    // GET /api/background - 获取背景图接口
-    svr.Get("/api/background", [&](const httplib::Request& req, httplib::Response& res) {
-        std::string imageData;
-        std::string contentType;
-
-        if (!bgManager.serveImage(imageData, contentType)) {
-            json response = {
-                {"success", false},
-                {"message", "没有可用的背景图"}
-            };
-            res.status = 404;
-            res.set_content(response.dump(), "application/json");
-            return;
-        }
-
-        res.set_header("Content-Type", contentType);
-        res.set_content(imageData, contentType);
-    });
-
-    // 设置静态文件目录用于背景图
-    svr.set_mount_point("/backgrounds", "./backgrounds");
+    ApiRouter apiRouter(authService, bgManager);
+    apiRouter.registerRoutes(svr);
 
     std::cout << "服务器启动在 http://localhost:8080" << std::endl;
     svr.listen("0.0.0.0", 8080);
