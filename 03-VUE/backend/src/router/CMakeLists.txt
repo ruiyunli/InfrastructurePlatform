@@ -10,5 +10,3 @@ target_include_directories(router_obj PUBLIC
     ${CMAKE_CURRENT_SOURCE_DIR}
     ${CMAKE_SOURCE_DIR}/src
 )
-
-target_link_libraries(router_obj PUBLIC OpenSSL::SSL OpenSSL::Crypto)

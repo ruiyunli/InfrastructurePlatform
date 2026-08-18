@@ -1,8 +1,9 @@
 #include "authservice.h"
+#include "jwt_helper.h"
 #include <chrono>
 #include <fstream>
 #include <nlohmann/json.hpp>
-#include <jwt-cpp/traits/nlohmann-json/defaults.h>
+#include <stdexcept>
 
 using json = nlohmann::json;
 
@@ -26,27 +27,16 @@ void AuthService::loadUsersFromFile(const std::string& usersFile) {
 }
 
 std::string AuthService::generateToken(const std::string& username) {
-    auto now = std::chrono::system_clock::now();
-    auto exp = now + std::chrono::hours(24);
-
-    return jwt::create<jwt::traits::nlohmann_json>()
-        .set_issuer("login-backend")
-        .set_type("JWT")
-        .set_issued_at(now)
-        .set_expires_at(exp)
-        .set_payload_claim("username", json(username))
-        .sign(jwt::algorithm::hs256{jwtSecret_});
+    constexpr int64_t kTtlSec = 24 * 60 * 60;  // 24 小时
+    return JwtHelper::generate(jwtSecret_, username, "login-backend", kTtlSec);
 }
 
 std::string AuthService::verifyToken(const std::string& token) const {
-    auto verifier = jwt::verify<jwt::traits::nlohmann_json>()
-        .allow_algorithm(jwt::algorithm::hs256{jwtSecret_})
-        .with_issuer("login-backend");
-
-    auto decoded = jwt::decode<jwt::traits::nlohmann_json>(token);
-    verifier.verify(decoded);
-
-    return decoded.get_payload_claim("username").as_string();
+    auto username = JwtHelper::verify(jwtSecret_, token, "login-backend");
+    if (!username) {
+        throw std::runtime_error("token invalid or expired");
+    }
+    return *username;
 }
 
 bool AuthService::verifyUser(const std::string& username, const std::string& password) {
