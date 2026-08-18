@@ -39,12 +39,12 @@
 |------|------|------|
 | C++ | 17 | 后端编程语言 |
 | httplib | header-only | 轻量级 HTTP 服务器库 |
-| jwt-cpp | header-only | JWT Token 生成与验证库 |
 | nlohmann/json | header-only | 现代 C++ JSON 库 |
-| OpenSSL | 3.x | 加密库（JWT签名依赖） |
+| jwt_helper | 自实现 | HS256 JWT 组装与验证 |
+| sha256 + base64url | 自实现 | SHA-256 / HMAC-SHA256 / Base64URL |
 
 **核心特性：**
-- 单文件 header-only 库，无需复杂依赖管理
+- header-only httplib/json + 自实现 SHA256/HMAC/Base64URL，零外部运行时依赖
 - JWT HS256 算法签名，24小时有效期
 - CORS 配置支持前端跨域请求
 - OPTIONS 预检请求自动处理
@@ -67,15 +67,24 @@
 │   └── package.json            # 依赖配置
 │
 ├── backend/                     # 后端项目
-│   ├── src/main.cpp            # HTTP服务器主程序
+│   ├── src/
+│   │   ├── main.cpp            # HTTP服务器主程序
+│   │   ├── service/
+│   │   │   ├── authservice.{h,cpp}        # AuthService（用户验证 + Token）
+│   │   │   ├── backgroudmanager.{h,cpp}   # 背景图服务
+│   │   │   ├── sha256.{h,cpp}             # SHA-256 + HMAC-SHA256
+│   │   │   ├── base64url.{h,cpp}         # Base64URL 编解码
+│   │   │   └── jwt_helper.{h,cpp}       # HS256 JWT 组装与验证
+│   │   └── router/
+│   │       └── ApiRouter.{h,cpp}         # 路由类
 │   ├── include/
 │   │   ├── httplib.h           # HTTP服务器库
-│   │   ├── json.hpp            # JSON处理库
-│   │   ├── auth.hpp            # JWT认证模块
-│   │   ├── users.hpp           # 用户数据模块
-│   │   └── jwt-cpp/            # JWT库
-│   ├── vcpkg/                  # vcpkg 包管理器
+│   │   └── nlohmann/json.hpp   # JSON处理库
+│   ├── release/
+│   │   ├── backgrounds/        # 背景图资源
+│   │   └── etc/users.json      # 用户账号配置
 │   ├── build/                  # 构建输出目录
+│   ├── configure.py            # 一键 CMake configure 脚本
 │   └── CMakeLists.txt          # CMake 配置
 │
 └── README.md                    # 本文档
@@ -89,17 +98,8 @@
 - pnpm（推荐）或 npm
 - CMake 3.15+
 - MSVC（Windows）或 GCC/Clang
-- vcpkg（用于安装 OpenSSL）
 
-> **关于 vcpkg**：vcpkg 是微软维护的 C/C++ 包管理器，用于管理依赖库如 OpenSSL。
->
-> 如果 backend/vcpkg 目录不存在或需要更新，可以使用以下命令下载指定稳定版本：
-> ```bash
-> # 下载稳定版本 2026.04.27（推荐）
-> git clone -b 2026.04.27 https://github.com/microsoft/vcpkg.git backend/vcpkg
-> ```
->
-> 首次使用后，需要运行 bootstrap 脚本生成 vcpkg.exe 可执行文件。
+> 后端依赖已自包含：httplib 和 nlohmann/json 是 header-only 入库；JWT 用自实现 HS256（基于 Brad Conte public domain SHA-256 + HMAC-SHA256 + Base64URL）。新开发机无需 vcpkg 或 OpenSSL。
 
 ### 1. 构建后端
 
@@ -107,42 +107,20 @@
 # 进入后端目录
 cd backend
 
-# 如果 backend/vcpkg 目录不存在，下载 vcpkg 源码（指定稳定版本）
-git clone -b 2026.04.27 https://github.com/microsoft/vcpkg.git backend/vcpkg
+# 方式一：一键 configure（推荐）
+python configure.py
 
-# 生成 vcpkg 可执行文件
+# 方式二：手动 cmake
 # Windows:
-.\backend\vcpkg\bootstrap-vcpkg.bat
+cmake -B build/x64 -S . -DCMAKE_BUILD_TYPE=Release
+cmake --build build/x64 --config Release
 # Linux/Mac:
-./backend/vcpkg/bootstrap-vcpkg.sh
-
-# 集成 vcpkg 到系统（只需一次）
-# Windows:
-.\backend\vcpkg\vcpkg.exe integrate install
-# Linux/Mac:
-./backend/vcpkg/vcpkg integrate install
-
-# 安装 OpenSSL
-# Windows:
-.\backend\vcpkg\vcpkg.exe install openssl:x64-windows
-# Linux/Mac:
-./backend/vcpkg/vcpkg install openssl:x64-linux
-
-# 配置 CMake
-# Windows:
-cmake -B build\x64 -S . -DCMAKE_BUILD_TYPE=Release -DCMAKE_TOOLCHAIN_FILE="$(pwd)/vcpkg/scripts/buildsystems/vcpkg.cmake"
-# Linux/Mac:
-cmake -B build/linux -S . -DCMAKE_BUILD_TYPE=Release -DCMAKE_TOOLCHAIN_FILE="$(pwd)/vcpkg/scripts/buildsystems/vcpkg.cmake" -G "Unix Makefiles"
-
-# 编译
-cmake --build build\x64 --config Release
+cmake -B build/linux -S . -G "Unix Makefiles"
+cmake --build build/linux
 
 # 运行后端服务器
-cd build/x64/Release
-# Windows:
-./server.exe
-# Linux/Mac:
-./server
+cd build/x64/Release    # Linux: cd build/linux
+./server.exe            # Linux: ./server
 ```
 
 后端服务启动在 http://localhost:8080
@@ -173,6 +151,7 @@ pnpm dev
 | `/api/login` | POST | 用户登录 | `{username, password}` | `{success, token, username}` |
 | `/api/logout` | POST | 用户注销 | - | `{success, message}` |
 | `/api/verify` | GET | 验证Token | Header: `Authorization: Bearer <token>` | `{success, username}` |
+| `/api/background` | GET | 获取背景图 | - | 图片二进制数据 |
 
 ## 测试账号
 
@@ -202,32 +181,26 @@ pnpm preview
 修改后端代码后需要重新编译：
 
 ```bash
-cmake --build build --config Release
+# Windows
+cmake --build build/x64 --config Release
+# Linux/Mac
+cmake --build build/linux
 ```
 
 ### 添加新用户
 
-修改 `backend/include/users.hpp` 文件中的用户列表：
+编辑 `backend/release/etc/users.json` 添加用户：
 
-```cpp
-const std::vector<User> users = {
-    {"admin", "admin"},
-    {"111", "111"},
-    {"222", "222"},
-    // 添加新用户...
-};
+```json
+[
+  {"username": "admin", "password": "admin"},
+  {"username": "111", "password": "111"},
+  {"username": "222", "password": "222"},
+  {"username": "newuser", "password": "newpass"}
+]
 ```
 
 ## 常见问题
-
-### Q: 后端编译失败，找不到 OpenSSL？
-
-确保 vcpkg 已正确安装 OpenSSL：
-
-```bash
-cd backend/vcpkg
-./vcpkg install openssl:x64-windows
-```
 
 ### Q: 前端请求后端报 CORS 错误？
 
