@@ -9,7 +9,7 @@
         <span>{{ user.state.username }}</span>
         <AppButton variant="ghost" @click="handleLogout">
           <svg class="icon" role="presentation" aria-hidden="true">
-            <use href="/icons.svg#icon-logout"></use>
+            <use :href="iconLogout"></use>
           </svg>
           注销
         </AppButton>
@@ -31,6 +31,8 @@ import AppButton from '../components/AppButton.vue'
 
 const router = useRouter()
 const appName = 'LoginApp'  // 新应用可改
+// public 静态文件带 base 前缀（dev 下 /LoginApp/icons.svg，生产同），不能用模板内 import.meta.env
+const iconLogout = `${import.meta.env.BASE_URL}icons.svg#icon-logout`
 
 const handleLogout = async () => {
   try { await logout() } catch (e) { /* ignore */ }

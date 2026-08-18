@@ -1,12 +1,10 @@
-<script setup>
+<script setup lang="ts">
 import { onMounted } from 'vue'
-import { useUserStore } from './stores/userStore'
+import { user } from './stores/user'
 
-const userStore = useUserStore()
-
-// 应用启动时检查登录状态
+// 应用启动时检查登录状态（从 localStorage 恢复并验证 token）
 onMounted(() => {
-  userStore.checkAuth()
+  user.checkAuth()
 })
 </script>
 
