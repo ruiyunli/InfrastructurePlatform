@@ -1,7 +1,6 @@
 # Build artifacts
 build/
 install/
-release/
 
 # vcpkg（按 README 说明用 git clone 拉取，不入库）
 vcpkg/

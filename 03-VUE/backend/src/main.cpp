@@ -31,7 +31,7 @@ int main() {
     setConsoleUtf8();
 
     // 初始化认证服务
-    AuthService authService("my_secret_key_2026");
+    AuthService authService("my_secret_key_2026", "users.json");
 
     // 初始化背景图管理器
     BackgroundManager bgManager;

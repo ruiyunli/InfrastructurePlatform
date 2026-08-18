@@ -1,16 +1,28 @@
 #include "authservice.h"
 #include <chrono>
+#include <fstream>
 #include <nlohmann/json.hpp>
 #include <jwt-cpp/traits/nlohmann-json/defaults.h>
 
 using json = nlohmann::json;
 
-AuthService::AuthService(const std::string& secret) : jwtSecret_(secret) {
-    users_ = {
-        {"admin", "admin"},
-        {"111", "111"},
-        {"222", "222"}
-    };
+AuthService::AuthService(const std::string& secret, const std::string& usersFile)
+    : jwtSecret_(secret) {
+    loadUsersFromFile(usersFile);
+}
+
+void AuthService::loadUsersFromFile(const std::string& usersFile) {
+    std::ifstream in(usersFile);
+    if (!in.is_open()) {
+        users_ = {{"admin", "admin"}};
+        return;
+    }
+
+    json data;
+    in >> data;
+    for (const auto& item : data) {
+        users_.push_back({item["username"], item["password"]});
+    }
 }
 
 std::string AuthService::generateToken(const std::string& username) {

@@ -58,10 +58,9 @@ install(TARGETS ${TARGET_NAME}
     RUNTIME DESTINATION ${INSTALL_DIR}
 )
 
-# 安装 backgrounds 目录
-install(DIRECTORY ${CMAKE_SOURCE_DIR}/release/backgrounds
-    DESTINATION ${INSTALL_DIR}
-)
+# 安装 release 目录里面的内容
+install(DIRECTORY ${CMAKE_SOURCE_DIR}/release/backgrounds   DESTINATION    ${INSTALL_DIR})
+install(DIRECTORY ${CMAKE_SOURCE_DIR}/release/etc           DESTINATION    ${INSTALL_DIR})
 
 # Windows: 安装 libcrypto DLL（根据当前配置）
 if(WIN32)
