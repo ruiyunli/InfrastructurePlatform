@@ -1,0 +1,24 @@
+# Build artifacts
+build/
+install/
+release/
+
+# vcpkg（按 README 说明用 git clone 拉取，不入库）
+vcpkg/
+
+# IDE
+.vscode/
+.idea/
+*.swp
+
+# OS
+.DS_Store
+Thumbs.db
+
+# 编译产物
+*.o
+*.obj
+*.exe
+*.dll
+*.so
+*.a
