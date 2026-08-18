@@ -1,6 +1,6 @@
 #include "authservice.h"
 #include <chrono>
-#include <json.hpp>
+#include <nlohmann/json.hpp>
 #include <jwt-cpp/traits/nlohmann-json/defaults.h>
 
 using json = nlohmann::json;

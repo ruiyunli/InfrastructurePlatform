@@ -2,20 +2,28 @@
 #include <iostream>
 #include <fstream>
 #include <sstream>
-#include <json.hpp>
+#include <nlohmann/json.hpp>
 #include <random>
 #include <filesystem>
-#include <windows.h>
+#include <locale>
 #include "service/backgroudmanager.h"
 #include "service/authservice.h"
+
+#ifdef _WIN32
+#include <windows.h>
+#endif
 
 using json = nlohmann::json;
 namespace fs = std::filesystem;
 
-// 设置控制台为 UTF-8 编码
+// 设置控制台为 UTF-8 编码（跨平台）
 void setConsoleUtf8() {
+#ifdef _WIN32
     SetConsoleOutputCP(CP_UTF8);
     SetConsoleCP(CP_UTF8);
+#else
+    setlocale(LC_ALL, "C.UTF-8");
+#endif
 }
 
 int main() {

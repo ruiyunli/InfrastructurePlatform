@@ -34,13 +34,11 @@ def main():
     if system == "Windows":
         platform_name = "x64"
         build_dir = root / "build" / platform_name
-        toolchain_file = root / "vcpkg" / "scripts" / "buildsystems" / "vcpkg.cmake"
-        configure_cmd = [cmake_exe, "-S", str(root), "-B", str(build_dir), "-DCMAKE_BUILD_TYPE=Release", f"-DCMAKE_TOOLCHAIN_FILE={toolchain_file}"]
+        configure_cmd = [cmake_exe, "-S", str(root), "-B", str(build_dir), "-DCMAKE_BUILD_TYPE=Release"]
     else:
         platform_name = "linux"
         build_dir = root / "build" / platform_name
-        toolchain_file = root / "vcpkg" / "scripts" / "buildsystems" / "vcpkg.cmake"
-        configure_cmd = [cmake_exe, "-S", str(root), "-B", str(build_dir), "-G", "Unix Makefiles", f"-DCMAKE_TOOLCHAIN_FILE={toolchain_file}"]
+        configure_cmd = [cmake_exe, "-S", str(root), "-B", str(build_dir), "-G", "Unix Makefiles"]
 
     # create build and install directories
     (root / "build" / platform_name).mkdir(parents=True, exist_ok=True)
