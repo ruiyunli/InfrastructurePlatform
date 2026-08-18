@@ -27,6 +27,9 @@ find_package(OpenSSL REQUIRED)
 # 添加 service 子目录
 add_subdirectory(src/service)
 
+# 添加 router 子目录
+add_subdirectory(src/router)
+
 # 添加可执行文件
 add_executable(${TARGET_NAME}
     src/main.cpp
@@ -35,6 +38,7 @@ add_executable(${TARGET_NAME}
 # 链接库
 target_link_libraries(${TARGET_NAME}
     service_obj
+    router_obj
     OpenSSL::SSL
     OpenSSL::Crypto
 )
