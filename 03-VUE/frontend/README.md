@@ -1,4 +1,6 @@
-# Frontend (Vue 3 + Vite + TypeScript)
+# Frontend（Vue 3 + Vite + TypeScript）
+
+登录前端：Vue 3.5 + Vite + Vue Router + Axios，无 Pinia（状态用 `reactive` 模块）。
 
 ## 快速开始
 
@@ -7,7 +9,22 @@ pnpm install
 pnpm dev
 ```
 
-访问 `http://localhost:5173/LoginApp/login`，账号 `admin/admin`。
+访问 `http://localhost:5173/LoginApp/login`，账号 `admin/admin`（后端默认用户，见 backend/README）。
+
+## 目录结构
+
+```
+src/
+├── api/http.ts               # axios 实例 + 拦截器（baseURL 跟随 VITE_BASE）
+├── stores/user.ts            # 用户态 reactive 模块（替代 Pinia）
+├── components/               # AppButton / AppInput（封装公共样式）
+├── layouts/DefaultLayout.vue # 顶部用户栏 + 主内容区
+├── views/                    # LoginPage / HomePage
+├── router/index.ts           # 路由（base 跟随 VITE_BASE）
+├── assets/logo.svg           # assets import 用法
+├── style.css                 # design token + 按钮/表单/表格基类
+└── App.vue / main.ts         # 入口
+```
 
 ## 配置
 
@@ -26,13 +43,15 @@ VITE_BASE=/LoginApp/
 | `/` | HomePage | 欢迎页 + 后端背景图 |
 | `/login` | LoginPage | 登录页 |
 
+未登录访问非登录页会自动重定向到 `/login`。
+
 ## 公共机制
 
 - **资源引用**（三种用法）：
   - `public/favicon.svg`：index.html 用 `<link href="/favicon.svg">` 引用（public 静态文件）
   - `public/icons.svg`：SVG sprite，组件用 `<use href="/icons.svg#icon-logout">` 引用（public sprite）
   - `src/assets/logo.svg`：组件里 `import logo from '../assets/logo.svg'` 引用（assets import，Vite 打 hash）
-- `src/style.css`：公共样式（design token + 按钮 `.btn` / 表单 `.form-group` / 表格 `.table` 基类）
+- `src/style.css`：公共样式（design token + `.btn` / `.form-group` / `.table` 基类）
 - `src/components/`：AppButton / AppInput，封装公共样式
 - `src/layouts/DefaultLayout.vue`：顶部用户栏 + 主内容区
 - `src/stores/user.ts`：用户态共享 reactive 模块（替代 Pinia）
