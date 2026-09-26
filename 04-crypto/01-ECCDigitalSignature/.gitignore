@@ -1,0 +1,14 @@
+# Build outputs
+build/
+install/
+
+# Key files (generated locally, not committed)
+keys/private.pem
+keys/public.pem
+!keys/.gitkeep
+
+# IDE
+.vs/
+CMakeCache.txt
+CMakeFiles/
+*.user
