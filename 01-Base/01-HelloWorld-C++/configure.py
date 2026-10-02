@@ -34,7 +34,7 @@ def main():
     if system == "Windows":
         platform_name = "x64"
         build_dir = root / "build" / platform_name
-        configure_cmd = [cmake_exe, "-S", str(root), "-B", str(build_dir), "-G", "Visual Studio 17 2022", "-A", "x64"]
+        configure_cmd = [cmake_exe, "-S", str(root), "-B", str(build_dir), "-G", "Visual Studio 18 2026", "-A", "x64"]
     else:
         platform_name = "linux"
         build_dir = root / "build" / platform_name
