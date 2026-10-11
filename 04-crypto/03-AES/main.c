@@ -4,9 +4,12 @@
 #include <windows.h>
 #include <psa/crypto.h>
 #include <mbedtls/error.h>
+#include <mbedtls/platform_util.h>
+
+#define AES_KEY_LEN 32
 
 /* AES-256-CBC 密钥：32 字节硬编码（仅供 demo 测试，请勿用于生产） */
-static const unsigned char key[32] = {
+static const unsigned char key_default[AES_KEY_LEN] = {
     0x00, 0x11, 0x22, 0x33, 0x44, 0x55, 0x66, 0x77,
     0x88, 0x99, 0xAA, 0xBB, 0xCC, 0xDD, 0xEE, 0xFF,
     0xFF, 0xEE, 0xDD, 0xCC, 0xBB, 0xAA, 0x99, 0x88,
@@ -67,6 +70,25 @@ static size_t pkcs7_unpad(const unsigned char *in, size_t in_len)
             return 0;
     }
     return in_len - pad_val;
+}
+
+/*
+ * 加载 AES-256 密钥
+ * @param key 输出缓冲区，长度至少 AES_KEY_LEN 字节
+ * @param len 缓冲区长度
+ * @return 成功返回 0，失败返回 -1
+ */
+static int load_key(unsigned char *key, size_t len)
+{
+    if (key == NULL || len < AES_KEY_LEN) {
+        fprintf(stderr, "load_key: invalid arg (key=%p, len=%zu)\n",
+                (void *)key, len);
+        return -1;
+    }
+
+    memcpy(key, key_default, AES_KEY_LEN);
+
+    return 0;
 }
 
 /* ------------------------------------------------------------------ */
@@ -274,6 +296,7 @@ static int test_basic_scenario(psa_key_id_t key_id)
 int main(void)
 {
     int all_pass = 1;
+    unsigned char key[AES_KEY_LEN];
 
     setConsoleUtf8();
 
@@ -290,14 +313,24 @@ int main(void)
                                             PSA_KEY_USAGE_DECRYPT);
     psa_set_key_algorithm(&attributes, PSA_ALG_CBC_NO_PADDING);
     psa_set_key_type(&attributes, PSA_KEY_TYPE_AES);
-    psa_set_key_bits(&attributes, 256);
+    psa_set_key_bits(&attributes, AES_KEY_LEN * 8);
+
+    /* 加载密钥 */
+    if (load_key(key, sizeof(key)) != 0) {
+        mbedtls_psa_crypto_free();
+        return 1;
+    }
 
     psa_key_id_t key_id = 0;
     status = psa_import_key(&attributes, key, sizeof(key), &key_id);
     psa_reset_key_attributes(&attributes);
 
+    /* 密钥已导入 PSA，清除栈上的明文副本 */
+    mbedtls_platform_zeroize(key, sizeof(key));
+
     if (status != PSA_SUCCESS) {
         fprintf(stderr, "psa_import_key failed: %ld\n", (long)status);
+        mbedtls_psa_crypto_free();
         return 1;
     }
 
@@ -311,6 +344,7 @@ int main(void)
 
     /* 清理 */
     psa_destroy_key(key_id);
+    mbedtls_psa_crypto_free();
 
     printf("\n===== 总体结果: %s =====\n", all_pass ? "PASS" : "FAIL");
     return all_pass ? 0 : 1;

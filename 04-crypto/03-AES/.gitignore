@@ -1,6 +1,7 @@
 # Build outputs
 build/
 install/
+3rdparty/
 
 # IDE
 .vs/
