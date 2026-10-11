@@ -17,13 +17,10 @@ def run_command(command, cwd=None):
 
 
 # 第三方库配置列表
+# 当前无外部依赖：随机数使用操作系统原生 CSPRNG
+# (Windows: BCryptGenRandom / Linux: getrandom)
 THIRDPARTY_DEPS = [
-    {
-        "name": "mbedtls-4.1.0",
-        "check_path": "3rdparty/mbedtls-4.1.0/win32",
-        "svn_url": "svn://192.168.1.200/binary/mbedtls-4.1.0/win32",
-    },
-    # 未来可在此添加更多第三方库，例如：
+    # 未来可在此添加第三方库，例如：
     # {
     #     "name": "openssl-3.0",
     #     "check_path": "3rdparty/openssl-3.0/win32",

@@ -1,8 +1,8 @@
 cmake_minimum_required(VERSION 3.15)
-project(AESKeyGenerator)
+project(AESKeyGenerator C)
 
-set(CMAKE_CXX_STANDARD 17)
-set(CMAKE_CXX_STANDARD_REQUIRED ON)
+set(CMAKE_C_STANDARD 11)
+set(CMAKE_C_STANDARD_REQUIRED ON)
 
 # 安装目录
 if(WIN32)
@@ -12,17 +12,6 @@ elseif(UNIX)
 endif()
 
 set(TARGET_NAME AESKeyGenerator)
-
-# mbedtls include directory
-if(WIN32)
-    set(MBEDTLS_INC_DIR "${CMAKE_SOURCE_DIR}/3rdparty/mbedtls-4.1.0/win32/include")
-    set(MBEDTLS_LIB_DIR "${CMAKE_SOURCE_DIR}/3rdparty/mbedtls-4.1.0/win32/lib")
-else()
-    # Linux: assume mbedtls built and installed to 3rdparty/mbedtls-4.1.0/linux/
-    set(MBEDTLS_INC_DIR "${CMAKE_SOURCE_DIR}/3rdparty/mbedtls-4.1.0/linux/include")
-    set(MBEDTLS_LIB_DIR "${CMAKE_SOURCE_DIR}/3rdparty/mbedtls-4.1.0/linux/lib")
-endif()
-include_directories(${MBEDTLS_INC_DIR})
 
 # Windows MSVC编译器使用UTF-8编码
 if(MSVC)
@@ -34,16 +23,12 @@ add_executable(${TARGET_NAME}
     main.c
 )
 
-# mbedtls libraries (PSA Crypto API)
+# 随机数来源为操作系统原生 CSPRNG，无需第三方密码库
 if(WIN32)
-    find_library(MBEDTLS_LIB mbedtls PATHS ${MBEDTLS_LIB_DIR} NO_DEFAULT_PATH REQUIRED)
-    find_library(TFPSACRYPTO_LIB tfpsacrypto PATHS ${MBEDTLS_LIB_DIR} NO_DEFAULT_PATH REQUIRED)
-    find_library(MBEDX509_LIB mbedx509 PATHS ${MBEDTLS_LIB_DIR} NO_DEFAULT_PATH REQUIRED)
-    target_link_libraries(${TARGET_NAME} ${MBEDTLS_LIB} ${TFPSACRYPTO_LIB} ${MBEDX509_LIB} bcrypt)
+    # BCryptGenRandom (CNG)
+    target_link_libraries(${TARGET_NAME} bcrypt)
 else()
-    find_library(MBEDTLS_LIB mbedtls PATHS ${MBEDTLS_LIB_DIR} NO_DEFAULT_PATH REQUIRED)
-    find_library(TFPSACRYPTO_LIB tfpsacrypto PATHS ${MBEDTLS_LIB_DIR} NO_DEFAULT_PATH REQUIRED)
-    target_link_libraries(${TARGET_NAME} ${MBEDTLS_LIB} ${TFPSACRYPTO_LIB} pthread m)
+    # getrandom(2) 位于 glibc，无需额外链接库
 endif()
 
 # Windows特定设置
@@ -56,9 +41,5 @@ if(WIN32)
     set_property(TARGET ${TARGET_NAME} PROPERTY VS_DEBUGGER_WORKING_DIRECTORY "${INSTALL_DIR}")
 endif()
 
-
-
 # 安装可执行文件
-install(TARGETS ${TARGET_NAME}    RUNTIME DESTINATION ${INSTALL_DIR})
-
-install(DIRECTORY keys                    DESTINATION ${INSTALL_DIR}  FILES_MATCHING PATTERN "*.pem")
+install(TARGETS ${TARGET_NAME} RUNTIME DESTINATION ${INSTALL_DIR})

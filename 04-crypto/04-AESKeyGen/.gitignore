@@ -7,3 +7,6 @@ install/
 CMakeCache.txt
 CMakeFiles/
 *.user
+
+# Generated key files
+*.key
