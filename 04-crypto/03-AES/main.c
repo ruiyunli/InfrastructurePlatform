@@ -205,7 +205,7 @@ static int test_basic_scenario(psa_key_id_t key_id)
 {
     int pass = 1;
 
-    const char *plaintext = "Hello, AES-256-CBC 加密 Demo! 跨平台兼容测试。";
+    const char *plaintext = "Hello, AES-256-CBC 加密 Demo! 文本测试。";
     size_t plaintext_len = strlen(plaintext);
 
     printf("=== AES-256-CBC 基本测试 (PSA Crypto API) ===\n\n");
