@@ -31,8 +31,8 @@ THIRDPARTY_DEPS = [
 # 下载第三方库
 def check_and_download_deps(root):
     """检查第三方依赖是否存在，不存在则从SVN下载"""
-    print("=" * 60)
-    print("检查第三方依赖...")
+    #print("=" * 60)
+    #print("检查第三方依赖...")
 
     for dep in THIRDPARTY_DEPS:
         target_path = root / dep["check_path"]
@@ -50,8 +50,8 @@ def check_and_download_deps(root):
 
         print(f"  [√] {dep['name']} 下载完成")
 
-    print("所有依赖已就绪")
-    print("=" * 60)
+    #print("所有依赖已就绪")
+    #print("=" * 60)
 
 # 主流程
 def main():
