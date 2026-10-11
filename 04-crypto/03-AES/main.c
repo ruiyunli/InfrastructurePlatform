@@ -1,6 +1,7 @@
 #include <stdio.h>
 #include <string.h>
 #include <stdint.h>
+#include <errno.h>
 #include <windows.h>
 #include <psa/crypto.h>
 #include <mbedtls/error.h>
@@ -8,6 +9,37 @@
 
 #define AES_KEY_LEN 32
 
+/* ------------------------------------------------------------------ */
+/* 密钥来源开关：二选一                                                */
+/* ------------------------------------------------------------------ */
+#define KEY_SOURCE_DEFAULT 0        /* 内置 key_default（demo，开箱即用） */
+#define KEY_SOURCE_FILE    1        /* 从运行目录的 aes.key 加载         */
+#define KEY_SOURCE         KEY_SOURCE_FILE
+
+#if KEY_SOURCE != KEY_SOURCE_DEFAULT && KEY_SOURCE != KEY_SOURCE_FILE
+#error "KEY_SOURCE must be KEY_SOURCE_DEFAULT or KEY_SOURCE_FILE"
+#endif
+
+/* 密钥文件：由 04-AESKeyGen 生成，使用者手动拷贝到运行目录 */
+#define KEY_FILE "aes.key"
+
+/* aes.key 格式（与 04-AESKeyGen 对称）：
+ *   [0]        1     hi = 区 A 行号 (0..31)
+ *   [1, 15)   14     随机填充
+ *   [15]       1     lo = 区 B 行号 (0..31)
+ *   [16, 528) 512    区 A：32 行 × 16B，第 hi 行 ← key[0..16)
+ *   [528,1040)512    区 B：32 行 × 16B，第 lo 行 ← key[16..32) */
+#define KEY_FILE_SIZE     1040
+#define KEY_HEADER_SIZE   16
+#define KEY_AREA_SIZE     512
+#define KEY_ROW_SIZE      16
+#define KEY_ROWS_PER_AREA (KEY_AREA_SIZE / KEY_ROW_SIZE)      /* 32  */
+#define KEY_AREA_A_OFFSET KEY_HEADER_SIZE                     /* 16  */
+#define KEY_AREA_B_OFFSET (KEY_HEADER_SIZE + KEY_AREA_SIZE)   /* 528 */
+#define KEY_IDX_HI_OFFSET 0
+#define KEY_IDX_LO_OFFSET 15
+
+#if KEY_SOURCE == KEY_SOURCE_DEFAULT
 /* AES-256-CBC 密钥：32 字节硬编码（仅供 demo 测试，请勿用于生产） */
 static const unsigned char key_default[AES_KEY_LEN] = {
     0x00, 0x11, 0x22, 0x33, 0x44, 0x55, 0x66, 0x77,
@@ -15,6 +47,7 @@ static const unsigned char key_default[AES_KEY_LEN] = {
     0xFF, 0xEE, 0xDD, 0xCC, 0xBB, 0xAA, 0x99, 0x88,
     0x77, 0x66, 0x55, 0x44, 0x33, 0x22, 0x11, 0x00
 };
+#endif
 
 /* ------------------------------------------------------------------ */
 /* 工具函数                                                            */
@@ -72,6 +105,52 @@ static size_t pkcs7_unpad(const unsigned char *in, size_t in_len)
     return in_len - pad_val;
 }
 
+#if KEY_SOURCE == KEY_SOURCE_FILE
+/*
+ * 从 aes.key 读取 AES-256 密钥（格式见 04-AESKeyGen）
+ * @param key 输出缓冲区，长度至少 AES_KEY_LEN 字节
+ * @return 成功返回 0，失败返回 -1
+ */
+static int load_key_from_file(unsigned char *key)
+{
+    unsigned char file[KEY_FILE_SIZE];
+
+    FILE *fp = fopen(KEY_FILE, "rb");
+    if (fp == NULL) {
+        fprintf(stderr, "load_key: cannot open key file '%s': %s\n",
+                KEY_FILE, strerror(errno));
+        return -1;
+    }
+
+    size_t n = fread(file, 1, KEY_FILE_SIZE, fp);
+    fclose(fp);
+    if (n != KEY_FILE_SIZE) {
+        fprintf(stderr, "load_key: key file '%s' size mismatch "
+                        "(expected %d bytes, got %zu)\n",
+                KEY_FILE, KEY_FILE_SIZE, n);
+        return -1;
+    }
+
+    unsigned char hi = file[KEY_IDX_HI_OFFSET];
+    unsigned char lo = file[KEY_IDX_LO_OFFSET];
+    if (hi >= KEY_ROWS_PER_AREA || lo >= KEY_ROWS_PER_AREA) {
+        fprintf(stderr, "load_key: key file '%s' is corrupt "
+                        "(row index out of range: hi=%u lo=%u)\n",
+                KEY_FILE, hi, lo);
+        return -1;
+    }
+
+    /* 密钥 = 区 A 第 hi 行 + 区 B 第 lo 行，各 16 字节 */
+    memcpy(key, file + KEY_AREA_A_OFFSET + (size_t)hi * KEY_ROW_SIZE,
+           KEY_ROW_SIZE);
+    memcpy(key + KEY_ROW_SIZE,
+           file + KEY_AREA_B_OFFSET + (size_t)lo * KEY_ROW_SIZE,
+           KEY_ROW_SIZE);
+
+    return 0;
+}
+#endif  /* KEY_SOURCE == KEY_SOURCE_FILE */
+
 /*
  * 加载 AES-256 密钥
  * @param key 输出缓冲区，长度至少 AES_KEY_LEN 字节
@@ -86,7 +165,15 @@ static int load_key(unsigned char *key, size_t len)
         return -1;
     }
 
+#if KEY_SOURCE == KEY_SOURCE_FILE
+    printf("KEYMODE: FILE\n");
+    /* 文件缺失 / 大小异常 / 行号越界时由 load_key_from_file 报错并失败 */
+    if (load_key_from_file(key) != 0)
+        return -1;
+#else
+    printf("KEYMODE: DEFAULT\n");
     memcpy(key, key_default, AES_KEY_LEN);
+#endif
 
     return 0;
 }
