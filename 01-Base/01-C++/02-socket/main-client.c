@@ -6,339 +6,94 @@
  * - 标准输入的内容发送给服务端
  * - 接收服务端消息并显示
  * - 输入 exit / quit / q 退出
+ *
+ * 网络与平台相关代码在 net.c 中实现。
  */
 #include <stdio.h>
-#include <stdlib.h>
-#include <string.h>
 
-#if defined(_WIN32)
-#define WIN32_LEAN_AND_MEAN
-#include <winsock2.h>
-#include <ws2tcpip.h>
-#include <windows.h>
-#else
-#include <arpa/inet.h>
-#include <errno.h>
-#include <netinet/in.h>
-#include <pthread.h>
-#include <signal.h>
-#include <strings.h>
-#include <sys/select.h>
-#include <sys/socket.h>
-#include <unistd.h>
-#endif
+#include "net.h"
 
 /* 服务端地址：本机使用 127.0.0.1；跨机器时改为服务端的局域网 IP */
 #define SERVER_IP "127.0.0.1"
 #define SERVER_PORT 8080
-#define LINE_SIZE 512
-#define QUEUE_CAPACITY 32
 
-/* ------------------------------------------------------------------ */
-/* 平台适配                                                            */
-/* ------------------------------------------------------------------ */
-#if defined(_WIN32)
-typedef SOCKET sock_t;
-typedef HANDLE thread_t;
-typedef CRITICAL_SECTION mutex_t;
-#define SOCK_INVALID INVALID_SOCKET
-#define sock_close closesocket
-#else
-typedef int sock_t;
-typedef pthread_t thread_t;
-typedef pthread_mutex_t mutex_t;
-#define SOCK_INVALID (-1)
-#define sock_close close
-#endif
-
-/* ------------------------------------------------------------------ */
-/* 输入队列：stdin 线程写入，主线程读取                                  */
-/* ------------------------------------------------------------------ */
-typedef struct {
-    mutex_t lock;
-    char lines[QUEUE_CAPACITY][LINE_SIZE];
-    int head;
-    int tail;
-    int count;
-} line_queue_t;
-
-static void queue_init(line_queue_t *queue)
-{
-    memset(queue, 0, sizeof(*queue));
-#if defined(_WIN32)
-    InitializeCriticalSection(&queue->lock);
-#else
-    pthread_mutex_init(&queue->lock, NULL);
-#endif
-}
-
-static void queue_push(line_queue_t *queue, const char *line)
-{
-#if defined(_WIN32)
-    EnterCriticalSection(&queue->lock);
-#else
-    pthread_mutex_lock(&queue->lock);
-#endif
-    if (queue->count < QUEUE_CAPACITY) {
-        strncpy(queue->lines[queue->tail], line, LINE_SIZE - 1);
-        queue->lines[queue->tail][LINE_SIZE - 1] = '\0';
-        queue->tail = (queue->tail + 1) % QUEUE_CAPACITY;
-        queue->count++;
-    }
-    /* 队列满时直接丢弃最新输入，避免阻塞网络循环 */
-#if defined(_WIN32)
-    LeaveCriticalSection(&queue->lock);
-#else
-    pthread_mutex_unlock(&queue->lock);
-#endif
-}
-
-static int queue_pop(line_queue_t *queue, char *out, size_t out_size)
-{
-    int got = 0;
-
-#if defined(_WIN32)
-    EnterCriticalSection(&queue->lock);
-#else
-    pthread_mutex_lock(&queue->lock);
-#endif
-    if (queue->count > 0) {
-        strncpy(out, queue->lines[queue->head], out_size - 1);
-        out[out_size - 1] = '\0';
-        queue->head = (queue->head + 1) % QUEUE_CAPACITY;
-        queue->count--;
-        got = 1;
-    }
-#if defined(_WIN32)
-    LeaveCriticalSection(&queue->lock);
-#else
-    pthread_mutex_unlock(&queue->lock);
-#endif
-    return got;
-}
-
-static void trim_line_end(char *text)
-{
-    size_t len = strlen(text);
-    while (len > 0 && (text[len - 1] == '\n' || text[len - 1] == '\r')) {
-        text[--len] = '\0';
-    }
-}
-
-static int iequals(const char *a, const char *b)
-{
-#if defined(_WIN32)
-    return _stricmp(a, b) == 0;
-#else
-    return strcasecmp(a, b) == 0;
-#endif
-}
-
-static int is_quit_command(const char *text)
-{
-    return iequals(text, "exit") || iequals(text, "quit") || iequals(text, "q");
-}
-
-#if defined(_WIN32)
-static DWORD WINAPI stdin_thread_proc(LPVOID arg)
-#else
-static void *stdin_thread_proc(void *arg)
-#endif
-{
-    line_queue_t *queue = (line_queue_t *)arg;
-    char line[LINE_SIZE];
-
-    while (fgets(line, sizeof(line), stdin) != NULL) {
-        trim_line_end(line);
-        if (line[0] != '\0') {
-            queue_push(queue, line);
-        }
-    }
-
-#if defined(_WIN32)
-    return 0;
-#else
-    return NULL;
-#endif
-}
-
-static int start_stdin_thread(thread_t *thread, line_queue_t *queue)
-{
-#if defined(_WIN32)
-    *thread = CreateThread(NULL, 0, stdin_thread_proc, queue, 0, NULL);
-    return (*thread == NULL) ? -1 : 0;
-#else
-    return (pthread_create(thread, NULL, stdin_thread_proc, queue) == 0) ? 0 : -1;
-#endif
-}
-
-/* ------------------------------------------------------------------ */
-/* socket 辅助函数                                                     */
-/* ------------------------------------------------------------------ */
-static int socket_system_init(void)
-{
-#if defined(_WIN32)
-    WSADATA wsa;
-    if (WSAStartup(MAKEWORD(2, 2), &wsa) != 0) {
-        fprintf(stderr, "WSAStartup failed: %d\n", WSAGetLastError());
-        return -1;
-    }
-    /* 让控制台按 UTF-8 显示中文 */
-    SetConsoleOutputCP(CP_UTF8);
-    SetConsoleCP(CP_UTF8);
-#else
-    /* 对端关闭后继续 send 不要终止进程 */
-    signal(SIGPIPE, SIG_IGN);
-#endif
-    return 0;
-}
-
-static void socket_system_cleanup(void)
-{
-#if defined(_WIN32)
-    WSACleanup();
-#endif
-}
-
-static void print_socket_error(const char *what)
-{
-#if defined(_WIN32)
-    fprintf(stderr, "%s failed: %d\n", what, WSAGetLastError());
-#else
-    fprintf(stderr, "%s failed: %s\n", what, strerror(errno));
-#endif
-}
-
-static int send_all(sock_t fd, const char *data, size_t len)
-{
-    size_t sent = 0;
-
-    while (sent < len) {
-        int n = (int)send(fd, data + sent, (int)(len - sent), 0);
-        if (n <= 0) {
-            return -1;
-        }
-        sent += (size_t)n;
-    }
-    return 0;
-}
-
-static int send_line(sock_t fd, const char *text)
-{
-    char buffer[LINE_SIZE + 2];
-    int len = snprintf(buffer, sizeof(buffer), "%s\n", text);
-
-    if (len < 0) {
-        return -1;
-    }
-    return send_all(fd, buffer, (size_t)len);
-}
-
-/* ------------------------------------------------------------------ */
-/* main                                                                */
-/* ------------------------------------------------------------------ */
 int main(void)
 {
-    line_queue_t input_queue;
-    thread_t stdin_thread;
-    sock_t server_fd;
-    struct sockaddr_in addr;
+    net_config_t cfg = { SERVER_IP, SERVER_PORT };
+    conn_t *server_conn;
+    input_reader_t *input;
+    line_reader_t reader;
     int running = 1;
 
     setvbuf(stdout, NULL, _IONBF, 0);
     setvbuf(stderr, NULL, _IONBF, 0);
 
-    if (socket_system_init() != 0) {
+    if (net_init() != 0) {
         return 1;
     }
 
-    queue_init(&input_queue);
-    if (start_stdin_thread(&stdin_thread, &input_queue) != 0) {
-        fprintf(stderr, "failed to start stdin thread\n");
-        socket_system_cleanup();
+    input = input_reader_start();
+    if (input == NULL) {
+        net_cleanup();
         return 1;
     }
 
-    server_fd = socket(AF_INET, SOCK_STREAM, 0);
-    if (server_fd == SOCK_INVALID) {
-        print_socket_error("socket");
-        socket_system_cleanup();
+    server_conn = net_connect(&cfg);
+    if (server_conn == NULL) {
+        net_cleanup();
         return 1;
     }
 
-    memset(&addr, 0, sizeof(addr));
-    addr.sin_family = AF_INET;
-    addr.sin_port = htons(SERVER_PORT);
-    if (inet_pton(AF_INET, SERVER_IP, &addr.sin_addr) != 1) {
-        fprintf(stderr, "invalid server address: %s\n", SERVER_IP);
-        sock_close(server_fd);
-        socket_system_cleanup();
-        return 1;
-    }
-
-    if (connect(server_fd, (struct sockaddr *)&addr, sizeof(addr)) != 0) {
-        print_socket_error("connect");
-        sock_close(server_fd);
-        socket_system_cleanup();
-        return 1;
-    }
-
+    line_reader_init(&reader);
     printf("[client] connected to %s:%d\n", SERVER_IP, SERVER_PORT);
     printf("[client] 输入内容发送给服务端；输入 exit / quit / q 退出\n");
 
     while (running) {
-        fd_set readfds;
-        struct timeval timeout;
-        int ready;
+        conn_t *conns[1];
+        net_wait_result_t wait_result;
+        int rc;
 
-        FD_ZERO(&readfds);
-        FD_SET(server_fd, &readfds);
-
-        timeout.tv_sec = 0;
-        timeout.tv_usec = 200 * 1000;
-
-        ready = select((int)(server_fd + 1), &readfds, NULL, NULL, &timeout);
-        if (ready < 0) {
-#if defined(_WIN32)
-            if (WSAGetLastError() == WSAEINTR) {
-                continue;
-            }
-#else
-            if (errno == EINTR) {
-                continue;
-            }
-#endif
-            print_socket_error("select");
+        conns[0] = server_conn;
+        if (net_wait(&wait_result, NULL, conns, 1, 200) < 0) {
             break;
         }
 
         /* 接收服务端消息 */
-        if (ready > 0 && FD_ISSET(server_fd, &readfds)) {
-            char buffer[LINE_SIZE];
-            int n = (int)recv(server_fd, buffer, (int)(sizeof(buffer) - 1), 0);
+        if (wait_result.ready[0]) {
+            rc = line_reader_feed(&reader, server_conn);
 
-            if (n <= 0) {
-                printf("[client] server closed the connection\n");
+            if (rc == NET_RESULT_ERROR) {
+                printf("[client] receive error\n");
                 running = 0;
             } else {
-                buffer[n] = '\0';
-                trim_line_end(buffer);
-                printf("[server] %s\n", buffer);
+                for (;;) {
+                    char line[NET_LINE_SIZE];
+
+                    if (line_reader_next(&reader, line, sizeof(line)) != LINE_READER_LINE) {
+                        break;
+                    }
+                    printf("[server] %s\n", line);
+                }
+
+                if (rc == NET_RESULT_CLOSED) {
+                    printf("[client] server closed the connection\n");
+                    running = 0;
+                }
             }
         }
 
-        /* 处理标准输入 */
+        /* 处理标准输入：发送给服务端 */
         if (running) {
-            char line[LINE_SIZE];
+            char line[NET_LINE_SIZE];
 
-            while (queue_pop(&input_queue, line, sizeof(line))) {
+            while (input_reader_pop(input, line, sizeof(line))) {
                 if (is_quit_command(line)) {
                     printf("[client] disconnecting\n");
                     running = 0;
                     break;
                 }
-                if (send_line(server_fd, line) != 0) {
-                    print_socket_error("send");
+                if (net_write_line(server_conn, line) <= 0) {
+                    printf("[client] send failed\n");
                     running = 0;
                     break;
                 }
@@ -347,8 +102,8 @@ int main(void)
         }
     }
 
-    sock_close(server_fd);
-    socket_system_cleanup();
+    net_close(server_conn);
+    net_cleanup();
     printf("[client] disconnected\n");
 
     return 0;

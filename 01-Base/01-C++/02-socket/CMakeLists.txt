@@ -16,14 +16,22 @@ if(MSVC)
     add_compile_options(/utf-8)
 endif()
 
+# 公共网络模块：平台适配 + 连接抽象 + 行缓冲
+add_library(net STATIC
+    net.c
+    net.h
+)
+
 # 两个独立的可执行文件
 add_executable(server main-server.c)
 add_executable(client main-client.c)
 
+target_link_libraries(server PRIVATE net)
+target_link_libraries(client PRIVATE net)
+
 if(WIN32)
     # Windows 需要链接 Winsock 库
-    target_link_libraries(server PRIVATE ws2_32)
-    target_link_libraries(client PRIVATE ws2_32)
+    target_link_libraries(net PUBLIC ws2_32)
 
     # 设置 Visual Studio 启动项目为 server
     set_property(DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR} PROPERTY VS_STARTUP_PROJECT server)
@@ -36,8 +44,7 @@ if(WIN32)
 else()
     # Linux 下后台输入线程需要 pthread
     find_package(Threads REQUIRED)
-    target_link_libraries(server PRIVATE Threads::Threads)
-    target_link_libraries(client PRIVATE Threads::Threads)
+    target_link_libraries(net PUBLIC Threads::Threads)
 endif()
 
 # 安装可执行文件
