@@ -1,57 +1,26 @@
 /*
- * net.c - 跨平台网络工具模块实现
+ * net-common.c - 公共模块实现
  *
- * 平台差异全部集中在这里。未来接入 TLS 时：
- * - 在 conn 结构中加入 TLS 会话
- * - 在 net_connect / net_accept / net_read / net_write / net_close
- *   中替换为 TLS 对应调用
- * - 在 net_wait 中处理 TLS 内部缓冲（SSL_pending）
- * line_reader 和业务代码不需要修改。
+ * 与传输方式无关：
+ * - 平台初始化 / 清理
+ * - 后端共用的裸 TCP 辅助函数与 select 封装
+ * - 行缓冲（解决 TCP 粘包 / 半包）
+ * - 标准输入读取线程
  */
-#include "net.h"
+#include "net-internal.h"
 
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 
-#if defined(_WIN32)
-#define WIN32_LEAN_AND_MEAN
-#include <winsock2.h>
-#include <ws2tcpip.h>
-#include <windows.h>
-
-typedef SOCKET sock_t;
-typedef CRITICAL_SECTION mutex_t;
-#define SOCK_INVALID INVALID_SOCKET
-#define sock_close closesocket
-#else
-#include <arpa/inet.h>
-#include <errno.h>
-#include <netinet/in.h>
-#include <pthread.h>
-#include <signal.h>
-#include <strings.h>
-#include <sys/select.h>
-#include <sys/socket.h>
-#include <unistd.h>
-
-typedef int sock_t;
-typedef pthread_mutex_t mutex_t;
-#define SOCK_INVALID (-1)
-#define sock_close close
-#endif
+#include "net-common.h"
 
 #define INPUT_QUEUE_CAPACITY 32
-
-struct conn {
-    sock_t fd;
-    /* 未来 TLS：TLS 会话对象可以放在这里 */
-};
 
 /* ------------------------------------------------------------------ */
 /* 生命周期与错误处理                                                  */
 /* ------------------------------------------------------------------ */
-int net_init(void)
+int net_platform_init(void)
 {
 #if defined(_WIN32)
     WSADATA wsa;
@@ -69,11 +38,29 @@ int net_init(void)
     return 0;
 }
 
-void net_cleanup(void)
+void net_platform_cleanup(void)
 {
 #if defined(_WIN32)
     WSACleanup();
 #endif
+}
+
+int net_init(void)
+{
+    if (net_platform_init() != 0) {
+        return -1;
+    }
+    if (net_backend_init() != 0) {
+        net_platform_cleanup();
+        return -1;
+    }
+    return 0;
+}
+
+void net_cleanup(void)
+{
+    net_backend_cleanup();
+    net_platform_cleanup();
 }
 
 void net_print_error(const char *what)
@@ -86,65 +73,48 @@ void net_print_error(const char *what)
 }
 
 /* ------------------------------------------------------------------ */
-/* 连接管理                                                            */
+/* 裸 TCP 辅助函数                                                     */
 /* ------------------------------------------------------------------ */
-static conn_t *conn_create(sock_t fd)
-{
-    conn_t *conn = (conn_t *)malloc(sizeof(*conn));
-
-    if (conn == NULL) {
-        fprintf(stderr, "out of memory\n");
-        return NULL;
-    }
-    conn->fd = fd;
-    return conn;
-}
-
-conn_t *net_listen(const net_config_t *cfg)
+sock_t net_tcp_listen(const char *host, int port)
 {
     sock_t fd;
     struct sockaddr_in addr;
     int reuse = 1;
-    conn_t *conn;
 
     fd = socket(AF_INET, SOCK_STREAM, 0);
     if (fd == SOCK_INVALID) {
         net_print_error("socket");
-        return NULL;
+        return SOCK_INVALID;
     }
 
     setsockopt(fd, SOL_SOCKET, SO_REUSEADDR, (const char *)&reuse, sizeof(reuse));
 
     memset(&addr, 0, sizeof(addr));
     addr.sin_family = AF_INET;
-    addr.sin_port = htons((unsigned short)cfg->port);
-    if (inet_pton(AF_INET, cfg->host, &addr.sin_addr) != 1) {
-        fprintf(stderr, "invalid listen address: %s\n", cfg->host);
+    addr.sin_port = htons((unsigned short)port);
+    if (inet_pton(AF_INET, host, &addr.sin_addr) != 1) {
+        fprintf(stderr, "invalid listen address: %s\n", host);
         sock_close(fd);
-        return NULL;
+        return SOCK_INVALID;
     }
 
     if (bind(fd, (struct sockaddr *)&addr, sizeof(addr)) != 0) {
         net_print_error("bind");
         sock_close(fd);
-        return NULL;
+        return SOCK_INVALID;
     }
 
     if (listen(fd, NET_MAX_WAIT_CONNS) != 0) {
         net_print_error("listen");
         sock_close(fd);
-        return NULL;
+        return SOCK_INVALID;
     }
 
-    conn = conn_create(fd);
-    if (conn == NULL) {
-        sock_close(fd);
-    }
-    return conn;
+    return fd;
 }
 
-conn_t *net_accept(conn_t *listener, char *peer_ip, size_t peer_ip_size,
-                   unsigned short *peer_port)
+sock_t net_tcp_accept(sock_t listener, char *peer_ip, size_t peer_ip_size,
+                      unsigned short *peer_port)
 {
     struct sockaddr_in peer;
 #if defined(_WIN32)
@@ -153,18 +123,11 @@ conn_t *net_accept(conn_t *listener, char *peer_ip, size_t peer_ip_size,
     socklen_t peer_len = (socklen_t)sizeof(peer);
 #endif
     sock_t fd;
-    conn_t *conn;
 
-    fd = accept(listener->fd, (struct sockaddr *)&peer, &peer_len);
+    fd = accept(listener, (struct sockaddr *)&peer, &peer_len);
     if (fd == SOCK_INVALID) {
         net_print_error("accept");
-        return NULL;
-    }
-
-    conn = conn_create(fd);
-    if (conn == NULL) {
-        sock_close(fd);
-        return NULL;
+        return SOCK_INVALID;
     }
 
     if (peer_ip != NULL && peer_ip_size > 0) {
@@ -180,118 +143,122 @@ conn_t *net_accept(conn_t *listener, char *peer_ip, size_t peer_ip_size,
     if (peer_port != NULL) {
         *peer_port = (unsigned short)ntohs(peer.sin_port);
     }
-    return conn;
+    return fd;
 }
 
-conn_t *net_connect(const net_config_t *cfg)
+sock_t net_tcp_connect(const char *host, int port)
 {
     sock_t fd;
     struct sockaddr_in addr;
-    conn_t *conn;
 
     fd = socket(AF_INET, SOCK_STREAM, 0);
     if (fd == SOCK_INVALID) {
         net_print_error("socket");
-        return NULL;
+        return SOCK_INVALID;
     }
 
     memset(&addr, 0, sizeof(addr));
     addr.sin_family = AF_INET;
-    addr.sin_port = htons((unsigned short)cfg->port);
-    if (inet_pton(AF_INET, cfg->host, &addr.sin_addr) != 1) {
-        fprintf(stderr, "invalid server address: %s\n", cfg->host);
+    addr.sin_port = htons((unsigned short)port);
+    if (inet_pton(AF_INET, host, &addr.sin_addr) != 1) {
+        fprintf(stderr, "invalid server address: %s\n", host);
         sock_close(fd);
-        return NULL;
+        return SOCK_INVALID;
     }
 
     if (connect(fd, (struct sockaddr *)&addr, sizeof(addr)) != 0) {
         net_print_error("connect");
         sock_close(fd);
-        return NULL;
+        return SOCK_INVALID;
     }
 
-    conn = conn_create(fd);
-    if (conn == NULL) {
-        sock_close(fd);
-    }
-    return conn;
+    return fd;
 }
 
-void net_close(conn_t *conn)
+int net_error_is_retryable(void)
 {
-    if (conn == NULL) {
-        return;
-    }
-    /* 未来 TLS：这里先执行 TLS 关闭通知（close_notify） */
-    sock_close(conn->fd);
-    free(conn);
-}
-
-/* ------------------------------------------------------------------ */
-/* 读写                                                                */
-/* ------------------------------------------------------------------ */
-int net_read(conn_t *conn, void *buf, size_t len)
-{
-    int n;
-
-    if (len > 0x7fffffffU) {
-        len = 0x7fffffffU;
-    }
-    n = (int)recv(conn->fd, (char *)buf, (int)len, 0);
-    if (n > 0) {
-        return n;
-    }
-    if (n == 0) {
-        return NET_RESULT_CLOSED;
-    }
-
 #if defined(_WIN32)
-    if (WSAGetLastError() == WSAEWOULDBLOCK || WSAGetLastError() == WSAEINTR) {
-        return NET_RESULT_RETRY;
-    }
+    int code = WSAGetLastError();
+    return code == WSAEWOULDBLOCK || code == WSAEINTR;
 #else
-    if (errno == EAGAIN || errno == EWOULDBLOCK || errno == EINTR) {
-        return NET_RESULT_RETRY;
-    }
+    return errno == EAGAIN || errno == EWOULDBLOCK || errno == EINTR;
 #endif
-    return NET_RESULT_ERROR;
 }
 
-int net_write(conn_t *conn, const void *buf, size_t len)
+/* ------------------------------------------------------------------ */
+/* select 封装                                                         */
+/* ------------------------------------------------------------------ */
+int net_select_fds(sock_t listener_fd, const sock_t *fds, int count,
+                   int timeout_ms, int *listener_ready, int *ready)
 {
-    size_t sent = 0;
-    const char *data = (const char *)buf;
+    fd_set readfds;
+    struct timeval timeout;
+    int total = 0;
+    int i;
+#if !defined(_WIN32)
+    sock_t max_fd = 0;
+    int have_fd = 0;
+#endif
 
-    while (sent < len) {
-        size_t remaining = len - sent;
-        int n;
+    FD_ZERO(&readfds);
 
-        if (remaining > 0x7fffffffU) {
-            remaining = 0x7fffffffU;
-        }
-        n = (int)send(conn->fd, data + sent, (int)remaining, 0);
-        if (n > 0) {
-            sent += (size_t)n;
+    if (listener_fd != SOCK_INVALID) {
+        FD_SET(listener_fd, &readfds);
+#if !defined(_WIN32)
+        max_fd = listener_fd;
+        have_fd = 1;
+#endif
+    }
+    for (i = 0; i < count; i++) {
+        if (fds[i] == SOCK_INVALID) {
             continue;
         }
-        if (n == 0) {
-            return NET_RESULT_CLOSED;
-        }
-
-#if defined(_WIN32)
-        if (WSAGetLastError() == WSAEWOULDBLOCK || WSAGetLastError() == WSAEINTR) {
-            return NET_RESULT_RETRY;
-        }
-#else
-        if (errno == EAGAIN || errno == EWOULDBLOCK || errno == EINTR) {
-            return NET_RESULT_RETRY;
+        FD_SET(fds[i], &readfds);
+#if !defined(_WIN32)
+        if (!have_fd || fds[i] > max_fd) {
+            max_fd = fds[i];
+            have_fd = 1;
         }
 #endif
-        return NET_RESULT_ERROR;
     }
-    return (int)sent;
+
+    timeout.tv_sec = timeout_ms / 1000;
+    timeout.tv_usec = (timeout_ms % 1000) * 1000;
+
+#if defined(_WIN32)
+    if (select(0, &readfds, NULL, NULL, &timeout) < 0) {
+        if (WSAGetLastError() == WSAEINTR) {
+            return 0;
+        }
+        net_print_error("select");
+        return -1;
+    }
+#else
+    if (select((int)(max_fd + 1), &readfds, NULL, NULL, &timeout) < 0) {
+        if (errno == EINTR) {
+            return 0;
+        }
+        net_print_error("select");
+        return -1;
+    }
+#endif
+
+    if (listener_fd != SOCK_INVALID && FD_ISSET(listener_fd, &readfds)) {
+        *listener_ready = 1;
+        total++;
+    }
+    for (i = 0; i < count; i++) {
+        if (fds[i] != SOCK_INVALID && FD_ISSET(fds[i], &readfds)) {
+            ready[i] = 1;
+            total++;
+        }
+    }
+    return total;
 }
 
+/* ------------------------------------------------------------------ */
+/* 按行发送                                                            */
+/* ------------------------------------------------------------------ */
 int net_write_line(conn_t *conn, const char *text)
 {
     char buffer[NET_LINE_SIZE + 2];
@@ -304,85 +271,6 @@ int net_write_line(conn_t *conn, const char *text)
         len = (int)sizeof(buffer) - 1;
     }
     return net_write(conn, buffer, (size_t)len);
-}
-
-/* ------------------------------------------------------------------ */
-/* 等待可读                                                            */
-/* ------------------------------------------------------------------ */
-int net_wait(net_wait_result_t *result, conn_t *listener,
-             conn_t *const *conns, int conn_count, int timeout_ms)
-{
-    fd_set readfds;
-    struct timeval timeout;
-    int ready;
-    int i;
-#if !defined(_WIN32)
-    sock_t max_fd = 0;
-#endif
-
-    memset(result, 0, sizeof(*result));
-    if (conn_count > NET_MAX_WAIT_CONNS) {
-        conn_count = NET_MAX_WAIT_CONNS;
-    }
-
-    FD_ZERO(&readfds);
-    if (listener != NULL) {
-        FD_SET(listener->fd, &readfds);
-#if !defined(_WIN32)
-        max_fd = listener->fd;
-#endif
-    }
-    for (i = 0; i < conn_count; i++) {
-        if (conns[i] == NULL) {
-            continue;
-        }
-        FD_SET(conns[i]->fd, &readfds);
-#if !defined(_WIN32)
-        if (conns[i]->fd > max_fd) {
-            max_fd = conns[i]->fd;
-        }
-#endif
-    }
-
-    timeout.tv_sec = timeout_ms / 1000;
-    timeout.tv_usec = (timeout_ms % 1000) * 1000;
-
-#if defined(_WIN32)
-    ready = select(0, &readfds, NULL, NULL, &timeout);
-#else
-    ready = select((int)(max_fd + 1), &readfds, NULL, NULL, &timeout);
-#endif
-    if (ready < 0) {
-#if defined(_WIN32)
-        if (WSAGetLastError() == WSAEINTR) {
-            return 0;
-        }
-#else
-        if (errno == EINTR) {
-            return 0;
-        }
-#endif
-        net_print_error("select");
-        return NET_RESULT_ERROR;
-    }
-    if (ready == 0) {
-        return 0;
-    }
-
-    if (listener != NULL && FD_ISSET(listener->fd, &readfds)) {
-        result->listener_ready = 1;
-        result->ready_count++;
-    }
-    for (i = 0; i < conn_count; i++) {
-        if (conns[i] != NULL && FD_ISSET(conns[i]->fd, &readfds)) {
-            result->ready[i] = 1;
-            result->ready_count++;
-        }
-    }
-
-    /* 未来 TLS：如果 TLS 内部还有已解密数据，即使 select 未报可读，
-     * 也应把这些连接标记为可读（SSL_pending）。 */
-    return result->ready_count;
 }
 
 /* ------------------------------------------------------------------ */

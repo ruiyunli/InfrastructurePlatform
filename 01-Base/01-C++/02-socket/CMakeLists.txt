@@ -16,10 +16,14 @@ if(MSVC)
     add_compile_options(/utf-8)
 endif()
 
-# 公共网络模块：平台适配 + 连接抽象 + 行缓冲
+# 公共网络模块：公共部分 + 纯 TCP 后端
+# 后端文件与业务代码解耦，后续可通过 CMake 选项替换为 net-tls.c
 add_library(net STATIC
-    net.c
-    net.h
+    net-common.c
+    net-notls.c
+    net-backend.h
+    net-common.h
+    net-internal.h
 )
 
 # 两个独立的可执行文件

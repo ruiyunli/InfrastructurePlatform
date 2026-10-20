@@ -11,7 +11,8 @@
  */
 #include <stdio.h>
 
-#include "net.h"
+#include "net-backend.h"
+#include "net-common.h"
 
 /* 服务端地址：本机使用 127.0.0.1；跨机器时改为服务端的局域网 IP */
 #define SERVER_IP "127.0.0.1"
