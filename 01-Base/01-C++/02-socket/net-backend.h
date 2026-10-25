@@ -32,13 +32,22 @@ typedef struct {
     int ready_count;
 } net_wait_result_t;
 
-/* TLS 配置：纯 TCP 后端会忽略该结构 */
+/*
+ * TLS 配置：纯 TCP 后端会忽略该结构。
+ * 证书和私钥文件由 mbedTLS 自动识别 PEM / DER 格式；推荐 PEM：
+ * 一个 PEM 文件里可以依次拼接多张证书，便于部署"服务器证书 + 中间 CA"证书链。
+ */
 typedef struct {
-    const char *ca_file;      /* 校验对端证书时使用 */
-    const char *cert_file;    /* 本端证书链 */
-    const char *key_file;     /* 本端私钥 */
-    int verify_peer;          /* 0=不校验 1=校验 */
-    int handshake_timeout_ms; /* 握手超时，<=0 使用默认值 */
+    const char *ca_file;      /* 校验对端证书时使用（信任的 CA 链，可用多个 PEM 拼接） */
+    const char *cert_file;    /* 本端证书（服务端必填；客户端用于双向认证） */
+    const char *key_file;     /* 本端私钥（与服务端证书配套，PKCS#8 PEM 推荐） */
+    const char *server_name;  /* 客户端校验服务器证书时使用的名字；
+                                 为 NULL 时使用 net_connect 的 host。
+                                 可以是域名或 IP 字面量；
+                                 证书的 SAN 必须覆盖这个名字 */
+    int verify_peer;          /* 客户端：1=校验服务器证书（推荐）
+                                 服务端：1=要求客户端提供证书（双向认证） */
+    int handshake_timeout_ms; /* 握手超时，<=0 使用默认值（5000ms） */
 } net_tls_config_t;
 
 /* ------------------------------------------------------------------ */

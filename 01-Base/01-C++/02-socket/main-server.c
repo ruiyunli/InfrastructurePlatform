@@ -19,6 +19,12 @@
 #define SERVER_PORT 8080
 #define MAX_CLIENTS 5
 
+#if defined(NET_ENABLE_TLS)
+/* 相对工作目录（VS 调试时为 install 目录） */
+#define TLS_CERT_FILE "certs/server.crt.pem"
+#define TLS_KEY_FILE  "certs/server.key.pem"
+#endif
+
 typedef struct {
     conn_t *conn;
     int id;
@@ -66,6 +72,26 @@ int main(void)
     if (net_init() != 0) {
         return 1;
     }
+
+#if defined(NET_ENABLE_TLS)
+    {
+        /* 单向认证：客户端校验服务器证书，服务端不要求客户端证书 */
+        net_tls_config_t tls_cfg = {
+            NULL,            /* ca_file：单向认证时服务端用不到 */
+            TLS_CERT_FILE,
+            TLS_KEY_FILE,
+            NULL,            /* server_name：服务端不使用 */
+            0,               /* verify_peer：不要求客户端证书 */
+            5000             /* handshake_timeout_ms */
+        };
+
+        if (net_tls_enable(&tls_cfg) != 0) {
+            net_cleanup();
+            return 1;
+        }
+        printf("[server] TLS 1.3 enabled, cert=%s\n", TLS_CERT_FILE);
+    }
+#endif
 
     input = input_reader_start();
     if (input == NULL) {

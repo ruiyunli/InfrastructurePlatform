@@ -148,27 +148,45 @@ sock_t net_tcp_accept(sock_t listener, char *peer_ip, size_t peer_ip_size,
 
 sock_t net_tcp_connect(const char *host, int port)
 {
-    sock_t fd;
-    struct sockaddr_in addr;
+    struct addrinfo hints;
+    struct addrinfo *result = NULL;
+    struct addrinfo *it;
+    char port_text[16];
+    sock_t fd = SOCK_INVALID;
 
-    fd = socket(AF_INET, SOCK_STREAM, 0);
+    snprintf(port_text, sizeof(port_text), "%d", port);
+
+    memset(&hints, 0, sizeof(hints));
+    hints.ai_family = AF_INET;          /* 当前仅支持 IPv4 */
+    hints.ai_socktype = SOCK_STREAM;
+    hints.ai_protocol = IPPROTO_TCP;
+
+    /* host 既可以是点分十进制 IP，也可以是域名 */
+    if (getaddrinfo(host, port_text, &hints, &result) != 0 || result == NULL) {
+        fprintf(stderr, "cannot resolve server address: %s\n", host);
+        return SOCK_INVALID;
+    }
+
+    for (it = result; it != NULL; it = it->ai_next) {
+        fd = socket(it->ai_family, it->ai_socktype, it->ai_protocol);
+        if (fd == SOCK_INVALID) {
+            continue;
+        }
+#if defined(_WIN32)
+        if (connect(fd, it->ai_addr, (int)it->ai_addrlen) == 0) {
+#else
+        if (connect(fd, it->ai_addr, it->ai_addrlen) == 0) {
+#endif
+            break;
+        }
+        sock_close(fd);
+        fd = SOCK_INVALID;
+    }
+
+    freeaddrinfo(result);
+
     if (fd == SOCK_INVALID) {
-        net_print_error("socket");
-        return SOCK_INVALID;
-    }
-
-    memset(&addr, 0, sizeof(addr));
-    addr.sin_family = AF_INET;
-    addr.sin_port = htons((unsigned short)port);
-    if (inet_pton(AF_INET, host, &addr.sin_addr) != 1) {
-        fprintf(stderr, "invalid server address: %s\n", host);
-        sock_close(fd);
-        return SOCK_INVALID;
-    }
-
-    if (connect(fd, (struct sockaddr *)&addr, sizeof(addr)) != 0) {
         net_print_error("connect");
-        sock_close(fd);
         return SOCK_INVALID;
     }
 

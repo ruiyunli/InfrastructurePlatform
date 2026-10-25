@@ -101,3 +101,11 @@ endif()
 install(TARGETS server client
     RUNTIME DESTINATION ${INSTALL_DIR}
 )
+
+# 证书目录随可执行文件一起部署到 install/<platform>/<variant>/certs
+if(NET_ENABLE_TLS)
+    install(DIRECTORY "${CMAKE_SOURCE_DIR}/certs/"
+        DESTINATION "${INSTALL_DIR}/certs"
+        PATTERN "*.md" EXCLUDE
+    )
+endif()

@@ -18,6 +18,20 @@
 #define SERVER_IP "127.0.0.1"
 #define SERVER_PORT 8080
 
+#if defined(NET_ENABLE_TLS)
+/* 相对工作目录（VS 调试时为 install 目录） */
+#define TLS_CA_FILE "certs/ca.crt.pem"
+
+/*
+ * 证书校验名。NULL 表示直接使用 SERVER_IP，让"连哪个地址"和"证书写了什么名字"
+ * 保持一致：
+ * - SERVER_IP 是 IP：证书 SAN 需要包含 IP:127.0.0.1
+ * - SERVER_IP 是域名：证书 SAN 需要包含 DNS:该域名
+ * 只有"用 IP 连接、证书却只签给域名"时，才需要在这里单独填写域名。
+ */
+#define TLS_SERVER_NAME NULL
+#endif
+
 int main(void)
 {
     net_config_t cfg = { SERVER_IP, SERVER_PORT };
@@ -32,6 +46,27 @@ int main(void)
     if (net_init() != 0) {
         return 1;
     }
+
+#if defined(NET_ENABLE_TLS)
+    {
+        /* 单向认证：只校验服务器证书；cert_file / key_file 留空 */
+        net_tls_config_t tls_cfg = {
+            TLS_CA_FILE,
+            NULL,            /* cert_file：单向认证不需要客户端证书 */
+            NULL,            /* key_file */
+            TLS_SERVER_NAME,
+            1,               /* verify_peer：校验服务器证书 */
+            5000             /* handshake_timeout_ms */
+        };
+
+        if (net_tls_enable(&tls_cfg) != 0) {
+            net_cleanup();
+            return 1;
+        }
+        printf("[client] TLS 1.3 enabled, verifying %s\n",
+               TLS_SERVER_NAME != NULL ? TLS_SERVER_NAME : SERVER_IP);
+    }
+#endif
 
     input = input_reader_start();
     if (input == NULL) {
