@@ -1,15 +1,15 @@
 from pymilvus import MilvusClient, DataType, FieldSchema, CollectionSchema
 
-# 1. 连接 Milvus Lite（本地文件，零配置，无需 Docker）
+# 1. Connect to Milvus Lite (local file, zero config, no Docker required)
 client = MilvusClient("milvus_basic.db")
 
 COLLECTION_NAME = "collection_demo"
 
-# 如果集合已存在，先删除，保证代码可重复运行
+# Drop the collection first if it exists, so the script can be re-run
 if client.has_collection(COLLECTION_NAME):
     client.drop_collection(COLLECTION_NAME)
 
-# 2. 定义 Schema：主键 + 向量 + 标量
+# 2. Define the schema: primary key + vector + scalar
 schema = CollectionSchema(
     fields=[
         FieldSchema(name="id", dtype=DataType.INT64, is_primary=True),
@@ -18,13 +18,13 @@ schema = CollectionSchema(
     ]
 )
 
-# 3. 创建集合（自动创建索引）
+# 3. Create the collection (index is created automatically)
 client.create_collection(
     collection_name=COLLECTION_NAME,
     schema=schema,
 )
 
-# 4. 插入数据
+# 4. Insert data
 data = [
     {"id": 1, "vector": [0.1, 0.2, 0.3], "text": "Milvus is a vector database"},
     {"id": 2, "vector": [0.4, 0.5, 0.6], "text": "Vector search enables semantic search"},
@@ -32,21 +32,21 @@ data = [
 ]
 client.insert(collection_name=COLLECTION_NAME, data=data)
 
-# 5. 加载集合（搜索前必须加载）
+# 5. Load the collection (required before searching)
 client.load_collection(COLLECTION_NAME)
 
-# 6. 向量搜索
+# 6. Vector search
 search_result = client.search(
     collection_name=COLLECTION_NAME,
-    data=[[0.1, 0.2, 0.3]],   # 查询向量
-    limit=2,                   # 返回最相似的 2 条
-    output_fields=["text"],    # 同时返回标量字段
+    data=[[0.1, 0.2, 0.3]],   # query vector
+    limit=2,                   # return the 2 most similar results
+    output_fields=["text"],    # also return the scalar field
 )
 
-# 7. 打印结果
-print("搜索结果：")
+# 7. Print the results
+print("Search results:")
 for hits in search_result:
     for hit in hits:
-        print(f"  ID: {hit['id']}, 距离: {hit['distance']:.4f}, 文本: {hit['entity']['text']}")
+        print(f"  ID: {hit['id']}, distance: {hit['distance']:.4f}, text: {hit['entity']['text']}")
 
 client.close()

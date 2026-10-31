@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""milvus-tool.py —— 查看 Milvus Lite 本地库内容的小工具"""
+"""milvus-tool.py -- a small utility to inspect a local Milvus Lite database"""
 
 import argparse
 import glob
@@ -8,18 +8,18 @@ import sys
 
 from pymilvus import DataType, MilvusClient
 
-# 默认只打印向量的前几维，完整向量用 --full
+# Only print the first few vector dimensions by default; use --full for the whole vector
 VECTOR_PREVIEW_DIMS = 3
 
 
 def find_db_file(directory="."):
-    """找目录下第一个 .db 文件（按名字排序），没有则返回 None"""
+    """Return the first .db file in the directory (sorted by name), or None"""
     matches = sorted(glob.glob(os.path.join(directory, "*.db")))
     return matches[0] if matches else None
 
 
 def format_field(field):
-    """把 describe_collection 的一个字段格式化成 `名字: 类型 附加信息`"""
+    """Format one field from describe_collection as `name: type extra-info`"""
     text = f"{field['name']}: {DataType(field['type']).name}"
 
     params = field.get("params") or {}
@@ -28,18 +28,19 @@ def format_field(field):
     if "max_length" in params:
         text += f" max_length={params['max_length']}"
     if field.get("is_primary"):
-        text += " (主键)"
+        text += " (primary key)"
 
     return text
 
 
 def _format_number(value):
-    # 向量以 float32 存储，0.1 落盘会变成 0.10000000149011612，四舍五入抹掉噪声
+    # Vectors are stored as float32, so 0.1 becomes 0.10000000149011612 on disk;
+    # round to remove that noise
     return repr(round(float(value), 6))
 
 
 def format_value(value, full=False):
-    """格式化一个字段值；向量默认只显示前几维"""
+    """Format one field value; vectors show only the first few dimensions by default"""
     if isinstance(value, (list, tuple)):
         shown = list(value) if full else list(value[:VECTOR_PREVIEW_DIMS])
         text = ", ".join(_format_number(v) for v in shown)
@@ -51,7 +52,7 @@ def format_value(value, full=False):
 
 
 def format_row(row, full=False):
-    """把一行数据格式化成 `字段=值` 拼起来的一行；字符串加引号以便看出空串"""
+    """Format a row as `field=value` pairs; quote strings so empty strings are visible"""
     parts = []
     for key, value in row.items():
         if isinstance(value, str):
@@ -61,57 +62,59 @@ def format_row(row, full=False):
     return "  ".join(parts)
 
 
-SHOW_DESCRIPTION = """查看库内容。
+SHOW_DESCRIPTION = """Show database content.
 
-不带 -c：只列出库里所有集合的名字、条数和字段结构（概览），看不到条目详情。
-带 -c ：打印指定集合的条目详情；-n、-f、--full 这三个选项只有此时才生效。
+Without -c: list only the names, row counts and field schemas of all collections
+(overview); row details are not shown.
+With -c    : print the row details of the given collection; the -n, -f and --full
+options only take effect in this mode.
 """
 
 
 def build_parser():
     parser = argparse.ArgumentParser(
         prog="milvus-tool.py",
-        description="查看 Milvus Lite 本地库（.db 文件）里有什么",
+        description="Inspect what is inside a local Milvus Lite database (.db file)",
         add_help=False,
     )
-    parser.add_argument("-h", "-help", "--help", action="help", help="显示帮助并退出")
+    parser.add_argument("-h", "-help", "--help", action="help", help="show help and exit")
 
-    subparsers = parser.add_subparsers(dest="command", title="可用命令", required=True)
+    subparsers = parser.add_subparsers(dest="command", title="available commands", required=True)
 
     show = subparsers.add_parser(
         "show",
-        help="查看库内容：不带 -c 给概览，带 -c 打印某个集合的数据",
+        help="show database content: overview without -c, rows of one collection with -c",
         description=SHOW_DESCRIPTION,
         formatter_class=argparse.RawDescriptionHelpFormatter,
         add_help=False,
     )
-    show.add_argument("-h", "-help", "--help", action="help", help="显示帮助并退出")
-    show.add_argument("-p", "--path", help="指定 .db 库文件；默认取当前目录下第一个")
-    show.add_argument("-c", "--collection", help="指定集合名；不带则只列概览，看不到条目详情")
-    show.add_argument("-n", "--limit", type=int, default=10, help="打印几条数据（默认 10，需配合 -c）")
-    show.add_argument("-f", "--filter", default="", help='过滤表达式，如 "id in [1, 2]"（需配合 -c）')
-    show.add_argument("--full", action="store_true", help="向量完整打印，默认只打前 3 维（需配合 -c）")
+    show.add_argument("-h", "-help", "--help", action="help", help="show help and exit")
+    show.add_argument("-p", "--path", help="path to the .db file; defaults to the first one in the current directory")
+    show.add_argument("-c", "--collection", help="collection name; without it only an overview is listed")
+    show.add_argument("-n", "--limit", type=int, default=10, help="number of rows to print (default 10, requires -c)")
+    show.add_argument("-f", "--filter", default="", help='filter expression, e.g. "id in [1, 2]" (requires -c)')
+    show.add_argument("--full", action="store_true", help="print full vectors instead of the first 3 dimensions (requires -c)")
     show.set_defaults(func=cmd_show)
 
     help_parser = subparsers.add_parser(
         "help",
-        help="显示帮助：help 看总览，help 加命令名看某个命令的帮助",
+        help="show help: `help` for an overview, `help <command>` for a specific command",
         add_help=False,
     )
-    help_parser.add_argument("-h", "-help", "--help", action="help", help="显示帮助并退出")
-    help_parser.add_argument("topic", nargs="?", help="要查看帮助的命令名，如 show")
+    help_parser.add_argument("-h", "-help", "--help", action="help", help="show help and exit")
+    help_parser.add_argument("topic", nargs="?", help="command name to show help for, e.g. show")
     help_parser.set_defaults(func=cmd_help)
 
-    # cmd_help 需要拿到根 parser 和子命令表才能转发打印
+    # cmd_help needs the root parser and the subparser table to forward the print_help call
     parser.set_defaults(_parser=parser, _subparsers=subparsers)
 
     return parser
 
 
 def _print_overview(client, name):
-    """打印一个集合的概览：条数 + 字段"""
+    """Print an overview of one collection: row count + fields"""
     row_count = client.get_collection_stats(name).get("row_count", 0)
-    print(f"  {name}（{row_count} 条记录）")
+    print(f"  {name} ({row_count} rows)")
     for field in client.describe_collection(name)["fields"]:
         print(f"    {format_field(field)}")
 
@@ -119,10 +122,10 @@ def _print_overview(client, name):
 def _show_all(client):
     collections = client.list_collections()
     if not collections:
-        print("库里还没有任何集合。")
+        print("The database has no collections yet.")
         return 0
 
-    print(f"共 {len(collections)} 个集合：")
+    print(f"{len(collections)} collection(s):")
     print()
     for name in collections:
         _print_overview(client, name)
@@ -133,13 +136,14 @@ def _show_one(client, args):
     name = args.collection
     collections = client.list_collections()
     if name not in collections:
-        print(f"集合不存在: {name}", file=sys.stderr)
-        print(f"可用的集合: {', '.join(collections) or '（无）'}", file=sys.stderr)
+        print(f"Collection does not exist: {name}", file=sys.stderr)
+        print(f"Available collections: {', '.join(collections) or '(none)'}", file=sys.stderr)
         return 1
 
     row_count = client.get_collection_stats(name).get("row_count", 0)
 
-    # 查询前集合需处于 loaded 状态；Lite 下通常已自动加载，重复加载会报错，故忽略
+    # The collection must be loaded before querying; under Lite it is usually loaded
+    # automatically, and loading again raises an error, so ignore it
     try:
         client.load_collection(name)
     except Exception:
@@ -151,11 +155,12 @@ def _show_one(client, args):
         output_fields=["*"],
         limit=args.limit,
     )
-    # filter 恰好是 "主键 in [...]" 时，Milvus 走主键检索路径、忽略 limit 返回全部命中，
-    # 所以这里再按 -n 截一刀，保证 -n 说到做到
+    # When the filter is exactly "primary_key in [...]", Milvus uses the primary-key
+    # lookup path and ignores limit, returning all matches. Truncate here so -n is
+    # honored.
     rows = rows[: args.limit]
 
-    print(f"集合 {name}（共 {row_count} 条记录，显示 {len(rows)} 条）")
+    print(f"Collection {name} ({row_count} rows in total, showing {len(rows)})")
     print()
     for row in rows:
         print(format_row(row, full=args.full))
@@ -164,22 +169,23 @@ def _show_one(client, args):
 
 def cmd_show(args):
     if args.path:
-        # Milvus Lite 的 .db 是目录（新版本）也可能是文件（旧版本），所以只判存在
+        # A Milvus Lite .db is a directory in newer versions and possibly a file in
+        # older ones, so only check for existence
         if not os.path.exists(args.path):
-            print(f"库不存在: {args.path}", file=sys.stderr)
+            print(f"Database does not exist: {args.path}", file=sys.stderr)
             return 1
         path = args.path
     else:
         path = find_db_file()
         if path is None:
-            print(f"没有找到 .db 库（当前目录: {os.getcwd()}），可用 -p 指定", file=sys.stderr)
+            print(f"No .db database found (current directory: {os.getcwd()}); use -p to specify one", file=sys.stderr)
             return 1
 
-    print(f"库: {path}")
+    print(f"Database: {path}")
     if not args.path:
         candidates = sorted(glob.glob("*.db"))
         if len(candidates) > 1:
-            print(f"（当前目录有 {len(candidates)} 个 .db，已选第一个，可用 -p 指定）")
+            print(f"({len(candidates)} .db files in the current directory; using the first one, use -p to choose)")
     print()
 
     client = MilvusClient(path)
@@ -190,15 +196,15 @@ def cmd_show(args):
 
 
 def cmd_help(args):
-    """不带参数打印总览帮助，带命令名打印该命令的帮助（等价于 `show -help`）"""
+    """Print the top-level help without arguments, or one command's help (same as `show -help`)"""
     if args.topic is None:
         args._parser.print_help()
         return 0
 
     target = args._subparsers.choices.get(args.topic)
     if target is None:
-        print(f"没有这个命令: {args.topic}", file=sys.stderr)
-        print(f"可用命令: {', '.join(args._subparsers.choices)}", file=sys.stderr)
+        print(f"No such command: {args.topic}", file=sys.stderr)
+        print(f"Available commands: {', '.join(args._subparsers.choices)}", file=sys.stderr)
         return 1
 
     target.print_help()
@@ -206,7 +212,7 @@ def cmd_help(args):
 
 
 def main(argv=None):
-    # Windows 控制台默认 GBK，中文输出会乱码，这里显式改为 UTF-8
+    # Force UTF-8 output so non-ASCII text is not garbled on Windows consoles
     if hasattr(sys.stdout, "reconfigure"):
         sys.stdout.reconfigure(encoding="utf-8")
 

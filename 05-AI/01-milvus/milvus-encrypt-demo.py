@@ -5,18 +5,19 @@ import sys
 from cryptography.hazmat.primitives.ciphers import Cipher, algorithms, modes
 from pymilvus import CollectionSchema, DataType, FieldSchema, MilvusClient
 
-# Windows 控制台默认 GBK，中文输出会乱码，这里显式改为 UTF-8
+# Force UTF-8 output so non-ASCII text is not garbled on Windows consoles
 if hasattr(sys.stdout, "reconfigure"):
     sys.stdout.reconfigure(encoding="utf-8")
 
-# ==================== AES-256-CBC 加解密 ====================
-# 32 字节密钥。仅供示例固化在源码中，生产环境请改为从安全渠道获取
+# ==================== AES-256-CBC encrypt/decrypt ====================
+# 32-byte key. Hard-coded only for demo purposes; load it from a secure
+# source in production.
 AES_KEY = b"0123456789abcdef0123456789abcdef"
-BLOCK_SIZE = 16  # AES 分组长度，同时也是 IV 长度
+BLOCK_SIZE = 16  # AES block size, also the IV length
 
 
 def _pkcs7_pad(data: bytes) -> bytes:
-    """PKCS7 填充，与 04-crypto/03-AES 的手工填充保持一致"""
+    """PKCS7 padding, matching the manual padding in 04-crypto/03-AES"""
     pad_len = BLOCK_SIZE - len(data) % BLOCK_SIZE
     return data + bytes([pad_len]) * pad_len
 
@@ -24,13 +25,13 @@ def _pkcs7_pad(data: bytes) -> bytes:
 def _pkcs7_unpad(data: bytes) -> bytes:
     pad_len = data[-1]
     if not 1 <= pad_len <= BLOCK_SIZE:
-        raise ValueError(f"非法的 PKCS7 填充长度: {pad_len}")
+        raise ValueError(f"Invalid PKCS7 padding length: {pad_len}")
     return data[:-pad_len]
 
 
 def encrypt(plaintext: str) -> str:
-    """明文 -> base64(IV + 密文)，便于存进 VARCHAR 字段"""
-    iv = os.urandom(BLOCK_SIZE)  # 每次随机，故同一明文每次密文都不同
+    """plaintext -> base64(IV + ciphertext), convenient for a VARCHAR field"""
+    iv = os.urandom(BLOCK_SIZE)  # random per call, so the same plaintext encrypts differently
     data = _pkcs7_pad(plaintext.encode("utf-8"))
 
     encryptor = Cipher(algorithms.AES(AES_KEY), modes.CBC(iv)).encryptor()
@@ -40,7 +41,7 @@ def encrypt(plaintext: str) -> str:
 
 
 def decrypt(token: str) -> str:
-    """base64(IV + 密文) -> 明文"""
+    """base64(IV + ciphertext) -> plaintext"""
     raw = base64.b64decode(token)
     iv, ciphertext = raw[:BLOCK_SIZE], raw[BLOCK_SIZE:]
 
@@ -50,17 +51,18 @@ def decrypt(token: str) -> str:
     return _pkcs7_unpad(data).decode("utf-8")
 
 
-# ==================== Milvus 流程 ====================
-# 1. 连接 Milvus Lite（本地文件，零配置，无需 Docker）
+# ==================== Milvus workflow ====================
+# 1. Connect to Milvus Lite (local file, zero config, no Docker required)
 client = MilvusClient("milvus_encrypt.db")
 
 COLLECTION_NAME = "collection_demo"
 
-# 如果集合已存在，先删除，保证代码可重复运行
+# Drop the collection first if it exists, so the script can be re-run
 if client.has_collection(COLLECTION_NAME):
     client.drop_collection(COLLECTION_NAME)
 
-# 2. 定义 Schema：主键 + 向量 + 标量（text 存密文，故 max_length 放大到 4096）
+# 2. Define the schema: primary key + vector + scalar
+# (text stores ciphertext, so max_length is increased to 4096)
 schema = CollectionSchema(
     fields=[
         FieldSchema(name="id", dtype=DataType.INT64, is_primary=True),
@@ -69,13 +71,13 @@ schema = CollectionSchema(
     ]
 )
 
-# 3. 创建集合（自动创建索引）
+# 3. Create the collection (index is created automatically)
 client.create_collection(
     collection_name=COLLECTION_NAME,
     schema=schema,
 )
 
-# 4. 准备数据：标量 text 先加密，再交给 Milvus
+# 4. Prepare data: encrypt the scalar text before handing it to Milvus
 records = [
     (1, [0.1, 0.2, 0.3], "Milvus is a vector database"),
     (2, [0.4, 0.5, 0.6], "Vector search enables semantic search"),
@@ -87,44 +89,44 @@ data = [
     for rid, vec, text in records
 ]
 
-# 加密随机 IV 的效果：同一明文两次加密的结果并不相同
-print("加密效果演示（同一明文两次加密）：")
-print(f"  第一次: {encrypt(records[0][2])}")
-print(f"  第二次: {encrypt(records[0][2])}")
+# Effect of the random IV: encrypting the same plaintext twice gives different results
+print("Encryption demo (same plaintext encrypted twice):")
+print(f"  First : {encrypt(records[0][2])}")
+print(f"  Second: {encrypt(records[0][2])}")
 print()
 
-# 5. 插入数据（入的是密文）
+# 5. Insert data (ciphertext goes in)
 client.insert(collection_name=COLLECTION_NAME, data=data)
 
-# 6. 加载集合（搜索前必须加载）
+# 6. Load the collection (required before searching)
 client.load_collection(COLLECTION_NAME)
 
-# 7. 看看库里实际落盘的内容——是密文，拿不到密钥就读不出原文
+# 7. Inspect what is actually stored -- ciphertext; without the key it cannot be read
 stored = client.query(
     collection_name=COLLECTION_NAME,
     filter="id in [1, 2, 3]",
     output_fields=["id", "text"],
 )
-print("库中实际存储的标量数据：")
+print("Scalar data actually stored in the collection:")
 for row in sorted(stored, key=lambda r: r["id"]):
     print(f"  ID: {row['id']}, text: {row['text']}")
 print()
 
-# 8. 向量搜索（搜索仍走明文向量，密文标量随结果一并返回）
+# 8. Vector search (the search still uses plaintext vectors; ciphertext comes back with results)
 search_result = client.search(
     collection_name=COLLECTION_NAME,
-    data=[[0.1, 0.2, 0.3]],   # 查询向量
-    limit=2,                   # 返回最相似的 2 条
-    output_fields=["text"],    # 同时返回标量字段（密文）
+    data=[[0.1, 0.2, 0.3]],   # query vector
+    limit=2,                   # return the 2 most similar results
+    output_fields=["text"],    # also return the scalar field (ciphertext)
 )
 
-# 9. 打印结果：密文 + 解密还原的原文
-print("搜索结果：")
+# 9. Print results: ciphertext + plaintext recovered by decryption
+print("Search results:")
 for hits in search_result:
     for hit in hits:
         cipher_text = hit["entity"]["text"]
-        print(f"  ID: {hit['id']}, 距离: {hit['distance']:.4f}")
-        print(f"    密文: {cipher_text}")
-        print(f"    原文: {decrypt(cipher_text)}")
+        print(f"  ID: {hit['id']}, distance: {hit['distance']:.4f}")
+        print(f"    ciphertext: {cipher_text}")
+        print(f"    plaintext : {decrypt(cipher_text)}")
 
 client.close()
