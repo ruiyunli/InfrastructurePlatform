@@ -1,0 +1,16 @@
+# 本目录脚本/工具依赖 Milvus 2.x 的 Python SDK
+# 运行环境：Python >= 3.10，仅支持 Linux / macOS（Windows 请使用 WSL）
+# 已验证版本：pymilvus 2.6.17 / milvus-lite 2.5.1 / cryptography 50.0.2（Python 3.12）
+
+# Milvus Python SDK（2.x 最后一条版本线）
+pymilvus==2.6.17
+
+# Milvus Lite：单文件 .db 的本地模式，仅发布 Linux/macOS wheel
+milvus-lite==2.5.1
+
+# milvus-lite 2.5.1 仍通过 pkg_resources 导入，Python 3.12 的 venv 默认不再包含 setuptools；
+# setuptools 81+ 已移除 pkg_resources，因此必须限制在上限以下
+setuptools>=68,<81
+
+# milvus-encrypt-demo.py 的 AES-256-CBC 加解密
+cryptography>=50.0.2
