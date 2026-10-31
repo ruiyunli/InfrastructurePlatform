@@ -12,10 +12,23 @@ from pymilvus import DataType, MilvusClient
 VECTOR_PREVIEW_DIMS = 3
 
 
-def find_db_file(directory="."):
-    """Return the first .db file in the directory (sorted by name), or None"""
-    matches = sorted(glob.glob(os.path.join(directory, "*.db")))
-    return matches[0] if matches else None
+def choose_db_file(candidates):
+    """Ask the user to pick one of several .db databases; return the chosen path or None"""
+    print("Multiple .db databases found:")
+    for index, path in enumerate(candidates, start=1):
+        print(f"  {index}. {path}")
+
+    while True:
+        try:
+            answer = input(f"Select one [1-{len(candidates)}]: ").strip()
+        except EOFError:
+            print("\nNo interactive input available; use -p to specify a database.", file=sys.stderr)
+            return None
+
+        if answer.isdigit() and 1 <= int(answer) <= len(candidates):
+            return candidates[int(answer) - 1]
+
+        print(f"Invalid selection, enter a number between 1 and {len(candidates)}.")
 
 
 def format_field(field):
@@ -89,7 +102,7 @@ def build_parser():
         add_help=False,
     )
     show.add_argument("-h", "-help", "--help", action="help", help="show help and exit")
-    show.add_argument("-p", "--path", help="path to the .db file; defaults to the first one in the current directory")
+    show.add_argument("-p", "--path", help="path to the .db file; defaults to the only one in the current directory, or asks you to choose from several")
     show.add_argument("-c", "--collection", help="collection name; without it only an overview is listed")
     show.add_argument("-n", "--limit", type=int, default=10, help="number of rows to print (default 10, requires -c)")
     show.add_argument("-f", "--filter", default="", help='filter expression, e.g. "id in [1, 2]" (requires -c)')
@@ -176,16 +189,18 @@ def cmd_show(args):
             return 1
         path = args.path
     else:
-        path = find_db_file()
-        if path is None:
+        candidates = sorted(glob.glob("*.db"))
+        if not candidates:
             print(f"No .db database found (current directory: {os.getcwd()}); use -p to specify one", file=sys.stderr)
             return 1
+        if len(candidates) == 1:
+            path = candidates[0]
+        else:
+            path = choose_db_file(candidates)
+            if path is None:
+                return 1
 
     print(f"Database: {path}")
-    if not args.path:
-        candidates = sorted(glob.glob("*.db"))
-        if len(candidates) > 1:
-            print(f"({len(candidates)} .db files in the current directory; using the first one, use -p to choose)")
     print()
 
     client = MilvusClient(path)

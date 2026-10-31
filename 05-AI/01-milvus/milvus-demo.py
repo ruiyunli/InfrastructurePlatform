@@ -1,7 +1,20 @@
+import os
+import shutil
+
 from pymilvus import MilvusClient, DataType, FieldSchema, CollectionSchema
 
+DB_PATH = "milvus_basic.db"
+
+# Remove any leftover database from a previous run so the demo starts clean.
+# Milvus Lite stores the database as a directory in newer versions and as a
+# plain file in older ones, so handle both.
+if os.path.isdir(DB_PATH):
+    shutil.rmtree(DB_PATH)
+elif os.path.exists(DB_PATH):
+    os.remove(DB_PATH)
+
 # 1. Connect to Milvus Lite (local file, zero config, no Docker required)
-client = MilvusClient("milvus_basic.db")
+client = MilvusClient(DB_PATH)
 
 COLLECTION_NAME = "collection_demo"
 

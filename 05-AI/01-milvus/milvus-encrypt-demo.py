@@ -1,5 +1,6 @@
 import base64
 import os
+import shutil
 import sys
 
 from cryptography.hazmat.primitives.ciphers import Cipher, algorithms, modes
@@ -8,6 +9,16 @@ from pymilvus import CollectionSchema, DataType, FieldSchema, MilvusClient
 # Force UTF-8 output so non-ASCII text is not garbled on Windows consoles
 if hasattr(sys.stdout, "reconfigure"):
     sys.stdout.reconfigure(encoding="utf-8")
+
+DB_PATH = "milvus_encrypt.db"
+
+# Remove any leftover database from a previous run so the demo starts clean.
+# Milvus Lite stores the database as a directory in newer versions and as a
+# plain file in older ones, so handle both.
+if os.path.isdir(DB_PATH):
+    shutil.rmtree(DB_PATH)
+elif os.path.exists(DB_PATH):
+    os.remove(DB_PATH)
 
 # ==================== AES-256-CBC encrypt/decrypt ====================
 # 32-byte key. Hard-coded only for demo purposes; load it from a secure
@@ -53,7 +64,7 @@ def decrypt(token: str) -> str:
 
 # ==================== Milvus workflow ====================
 # 1. Connect to Milvus Lite (local file, zero config, no Docker required)
-client = MilvusClient("milvus_encrypt.db")
+client = MilvusClient(DB_PATH)
 
 COLLECTION_NAME = "collection_demo"
 
