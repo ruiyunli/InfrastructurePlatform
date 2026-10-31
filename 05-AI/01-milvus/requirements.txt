@@ -1,0 +1,12 @@
+# 本目录脚本/工具依赖 Milvus 3.x 的 Python SDK
+# 运行环境：Python >= 3.10
+# 已验证版本：pymilvus 3.0.2 / milvus-lite 3.2.1 / cryptography 50.0.2（Python 3.14）
+
+# Milvus Python SDK（3.x 提供 MilvusClient 新版 API）
+pymilvus>=3.0,<4.0
+
+# Milvus Lite：脚本中的 MilvusClient("milvus_basic.db") 本地文件模式
+milvus-lite>=3.0,<4.0
+
+# milvus-encrypt-demo.py 的 AES-256-CBC 加解密
+cryptography>=50.0.2

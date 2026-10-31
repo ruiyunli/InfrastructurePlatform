@@ -77,9 +77,9 @@ client.create_collection(
 
 # 4. 准备数据：标量 text 先加密，再交给 Milvus
 records = [
-    (1, [0.1, 0.2, 0.3], "Milvus 是一个向量数据库"),
-    (2, [0.4, 0.5, 0.6], "向量检索用于语义搜索"),
-    (3, [0.7, 0.8, 0.9], "Embedding 是数据的语义特征"),
+    (1, [0.1, 0.2, 0.3], "Milvus is a vector database"),
+    (2, [0.4, 0.5, 0.6], "Vector search enables semantic search"),
+    (3, [0.7, 0.8, 0.9], "Embeddings capture the semantic meaning of data"),
 ]
 
 data = [

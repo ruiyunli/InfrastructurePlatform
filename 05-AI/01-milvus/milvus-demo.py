@@ -26,9 +26,9 @@ client.create_collection(
 
 # 4. 插入数据
 data = [
-    {"id": 1, "vector": [0.1, 0.2, 0.3], "text": "Milvus 是一个向量数据库"},
-    {"id": 2, "vector": [0.4, 0.5, 0.6], "text": "向量检索用于语义搜索"},
-    {"id": 3, "vector": [0.7, 0.8, 0.9], "text": "Embedding 是数据的语义特征"},
+    {"id": 1, "vector": [0.1, 0.2, 0.3], "text": "Milvus is a vector database"},
+    {"id": 2, "vector": [0.4, 0.5, 0.6], "text": "Vector search enables semantic search"},
+    {"id": 3, "vector": [0.7, 0.8, 0.9], "text": "Embeddings capture the semantic meaning of data"},
 ]
 client.insert(collection_name=COLLECTION_NAME, data=data)
 
