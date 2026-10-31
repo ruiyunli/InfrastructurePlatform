@@ -16,13 +16,26 @@ server required).
 ## Requirements
 
 - Python >= 3.10
-- Dependencies (Milvus 3.x SDK):
+- Dependencies (Milvus 3.x SDK)
+
+Create and activate a virtual environment in this directory, then install the dependencies:
 
 ```bash
+# Windows (cmd / PowerShell / Git Bash)
+python -m venv .venv
+.venv\Scripts\activate        # Windows PowerShell: .venv\Scripts\Activate.ps1
+pip install -r requirements.txt
+```
+
+```bash
+# Linux / macOS
+python3 -m venv .venv
+source .venv/bin/activate
 pip install -r requirements.txt
 ```
 
 Key packages: `pymilvus>=3.0,<4.0`, `milvus-lite>=3.0,<4.0`, `cryptography>=50.0.2`.
+The local `.venv/` directory is ignored by `.gitignore`.
 
 ## Usage
 
