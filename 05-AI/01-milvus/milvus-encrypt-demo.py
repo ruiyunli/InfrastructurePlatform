@@ -52,9 +52,9 @@ def decrypt(token: str) -> str:
 
 # ==================== Milvus 流程 ====================
 # 1. 连接 Milvus Lite（本地文件，零配置，无需 Docker）
-client = MilvusClient("milvus_basic.db")
+client = MilvusClient("milvus_encrypt.db")
 
-COLLECTION_NAME = "encrypt_demo"
+COLLECTION_NAME = "collection_demo"
 
 # 如果集合已存在，先删除，保证代码可重复运行
 if client.has_collection(COLLECTION_NAME):

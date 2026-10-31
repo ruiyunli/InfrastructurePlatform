@@ -3,7 +3,7 @@ from pymilvus import MilvusClient, DataType, FieldSchema, CollectionSchema
 # 1. 连接 Milvus Lite（本地文件，零配置，无需 Docker）
 client = MilvusClient("milvus_basic.db")
 
-COLLECTION_NAME = "basic_demo"
+COLLECTION_NAME = "collection_demo"
 
 # 如果集合已存在，先删除，保证代码可重复运行
 if client.has_collection(COLLECTION_NAME):

@@ -54,16 +54,16 @@ secure key source in production.
 
 ```bash
 # Overview: collection names, row counts, and schemas
-python milvus-tool.py show
+python milvus-tool.py show -p milvus_basic.db
 
 # Dump records from a collection (default: 10 rows, first 3 vector dims)
-python milvus-tool.py show -c basic_demo
+python milvus-tool.py show -c collection_demo -p milvus_basic.db
 
 # Filter, limit, and print full vectors
-python milvus-tool.py show -c basic_demo -n 5 -f "id in [1, 2]" --full
+python milvus-tool.py show -c collection_demo -n 5 -f "id in [1, 2]" --full -p milvus_basic.db
 
 # Specify a database file explicitly
-python milvus-tool.py show -p ./milvus_basic.db -c encrypt_demo
+python milvus-tool.py show -p ./milvus_basic.db -c collection_demo -p milvus_basic.db
 ```
 
 ## Notes
