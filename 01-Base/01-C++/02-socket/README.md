@@ -20,13 +20,14 @@
 02-socket/
 ├── CMakeLists.txt       构建脚本，NET_ENABLE_TLS 选择后端
 ├── configure.py         配置脚本：检查依赖、生成构建目录
-├── net-backend.h        传输后端接口（连接、读写、等待、TLS 配置）
-├── net-common.c/.h      跨平台公共代码（select、行读写、命令行输入线程）
-├── net-internal.h       平台相关的内部定义
-├── net-notls.c          纯 TCP 后端
-├── net-tls.c            TLS 1.3 后端
-├── main-server.c        服务端示例
-├── main-client.c        客户端示例
+├── src/                 源码目录
+│   ├── net-backend.h    传输后端接口（连接、读写、等待、TLS 配置）
+│   ├── net-common.c/.h  跨平台公共代码（select、行读写、命令行输入线程）
+│   ├── net-internal.h   平台相关的内部定义
+│   ├── net-notls.c      纯 TCP 后端
+│   ├── net-tls.c        TLS 1.3 后端
+│   ├── main-server.c    服务端示例
+│   └── main-client.c    客户端示例
 ├── certs/               TLS 证书（构建时随 install 一起部署）
 │   ├── ca.crt.pem       客户端信任的 CA 证书
 │   ├── server.crt.pem   服务器证书

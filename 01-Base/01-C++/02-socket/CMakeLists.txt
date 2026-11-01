@@ -3,15 +3,18 @@ cmake_minimum_required(VERSION 3.15)
 set(CMAKE_C_STANDARD 11)
 set(CMAKE_C_STANDARD_REQUIRED ON)
 
+# 源码目录
+set(SRC_DIR "${CMAKE_SOURCE_DIR}/src")
+
 # 传输后端：默认纯 TCP，可选 mbedTLS
 option(NET_ENABLE_TLS "Enable TLS backend (requires mbedTLS in 3rdparty)" OFF)
 
 if(NET_ENABLE_TLS)
     set(NET_VARIANT "tls")
-    set(NET_BACKEND_SOURCE net-tls.c)
+    set(NET_BACKEND_SOURCE src/net-tls.c)
 else()
     set(NET_VARIANT "notls")
-    set(NET_BACKEND_SOURCE net-notls.c)
+    set(NET_BACKEND_SOURCE src/net-notls.c)
 endif()
 
 project(socket-tls-${NET_VARIANT} C)
@@ -31,16 +34,18 @@ endif()
 
 # 公共网络模块：公共部分 + 选定的传输后端
 add_library(net STATIC
-    net-common.c
+    src/net-common.c
     ${NET_BACKEND_SOURCE}
-    net-backend.h
-    net-common.h
-    net-internal.h
+    src/net-backend.h
+    src/net-common.h
+    src/net-internal.h
 )
 
+target_include_directories(net PUBLIC "${SRC_DIR}")
+
 # 两个独立的可执行文件
-add_executable(server main-server.c)
-add_executable(client main-client.c)
+add_executable(server src/main-server.c)
+add_executable(client src/main-client.c)
 
 target_link_libraries(server PRIVATE net)
 target_link_libraries(client PRIVATE net)
