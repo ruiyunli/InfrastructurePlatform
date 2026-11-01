@@ -1,4 +1,5 @@
 #include <stdio.h>
+#include <stdlib.h>
 #include <string.h>
 #include <stdint.h>
 #include <errno.h>
@@ -53,6 +54,109 @@ static void print_hex(const char *label, const unsigned char *data, size_t len)
             printf("\n%24s  ", "");
     }
     printf("\n");
+}
+
+/** 写文件（二进制） */
+static int write_file(const char *path, const unsigned char *data, size_t len)
+{
+    FILE *fp = fopen(path, "wb");
+    if (fp == NULL) {
+        fprintf(stderr, "fopen(%s, wb) failed: %s\n", path, strerror(errno));
+        return -1;
+    }
+    size_t written = fwrite(data, 1, len, fp);
+    fclose(fp);
+    if (written != len) {
+        fprintf(stderr, "write %s failed: %zu/%zu bytes\n", path, written, len);
+        return -1;
+    }
+    return 0;
+}
+
+/** 读文件（二进制），文件大小不能超过 cap */
+static int read_file(const char *path, unsigned char *buf, size_t cap, size_t *len)
+{
+    FILE *fp = fopen(path, "rb");
+    if (fp == NULL) {
+        fprintf(stderr, "fopen(%s, rb) failed: %s\n", path, strerror(errno));
+        return -1;
+    }
+
+    if (fseek(fp, 0, SEEK_END) != 0) {
+        fprintf(stderr, "fseek(%s) failed\n", path);
+        fclose(fp);
+        return -1;
+    }
+    long size = ftell(fp);
+    if (size < 0 || (size_t)size > cap) {
+        fprintf(stderr, "read %s failed: size=%ld, cap=%zu\n", path, size, cap);
+        fclose(fp);
+        return -1;
+    }
+    rewind(fp);
+
+    size_t n = fread(buf, 1, (size_t)size, fp);
+    fclose(fp);
+    if (n != (size_t)size) {
+        fprintf(stderr, "read %s failed: %zu/%ld bytes\n", path, n, size);
+        return -1;
+    }
+
+    *len = n;
+    return 0;
+}
+
+/** 二进制转小写 hex 字符串（out 至少 2*len+1 字节） */
+static void bytes_to_hex(const unsigned char *in, size_t len, char *out)
+{
+    static const char hex_digits[] = "0123456789abcdef";
+    for (size_t i = 0; i < len; i++) {
+        out[i * 2]     = hex_digits[in[i] >> 4];
+        out[i * 2 + 1] = hex_digits[in[i] & 0x0F];
+    }
+    out[len * 2] = '\0';
+}
+
+/**
+ * 用 PSA 计算 SHA-256，输出 64 字符小写 hex
+ * @return 成功返回 0，失败返回 -1
+ */
+static int sha256_hex(const unsigned char *data, size_t len,
+                      char *hex_out, size_t hex_out_size)
+{
+    unsigned char digest[32];
+    size_t digest_len = 0;
+
+    if (hex_out_size < sizeof(digest) * 2 + 1) {
+        fprintf(stderr, "sha256_hex: output buffer too small\n");
+        return -1;
+    }
+
+    psa_status_t status = psa_hash_compute(PSA_ALG_SHA_256, data, len,
+                                           digest, sizeof(digest), &digest_len);
+    if (status != PSA_SUCCESS) {
+        fprintf(stderr, "psa_hash_compute failed: %ld\n", (long)status);
+        return -1;
+    }
+    if (digest_len != sizeof(digest)) {
+        fprintf(stderr, "unexpected SHA-256 length: %zu\n", digest_len);
+        return -1;
+    }
+
+    bytes_to_hex(digest, digest_len, hex_out);
+    return 0;
+}
+
+/** 通过 cmd.exe 执行命令，成功返回 0 */
+static int run_command(const char *command)
+{
+    printf("  > %s\n", command);
+    int rc = system(command);
+    if (rc != 0) {
+        fprintf(stderr, "command failed (rc=%d): %s\n", rc, command);
+        return -1;
+    }
+    return 0;
 }
 
 /**
@@ -239,67 +343,151 @@ static psa_status_t aes256_cbc_decrypt(unsigned char *out, size_t *out_len,
 /* 测试场景                                                            */
 /* ------------------------------------------------------------------ */
 
+#define ORIGIN_FILE    "origin.txt"
+#define ENCRYPT_FILE   "encrypt.bin"
+#define SHA_FILE       "sha.txt"
+#define ZIP_FILE       "public.zip"
+#define EXTRACT_DIR    "extract"
+#define RESTORED_FILE  "origin_restored.txt"
+
+#define SHA256_HEX_LEN 64
+
 static int test_basic_scenario(psa_key_id_t key_id)
 {
+    /* origin.txt 内容：第一行 0-9，第二行 A-Z */
+    static const char origin_content[] =
+        "0123456789\n"
+        "ABCDEFGHIJKLMNOPQRSTUVWXYZ\n";
+
     int pass = 1;
-
-    const char *plaintext = "Hello, AES-256-CBC 加密 Demo! 文本测试。";
-    size_t plaintext_len = strlen(plaintext);
-
-    printf("=== AES-256-CBC 基本测试 (PSA Crypto API) ===\n\n");
-    printf("明文: %s\n", plaintext);
-    print_hex("明文 (hex)", (const unsigned char *)plaintext, plaintext_len);
-    printf("\n");
-
-    /* 加密 */
+    unsigned char plain[1024];
+    size_t plain_len = 0;
     unsigned char encrypted[1024];
     size_t encrypted_len = 0;
+    unsigned char extracted[1024];
+    size_t extracted_len = 0;
+    unsigned char decrypted[1024];
+    size_t decrypted_len = 0;
+    unsigned char stored_buf[128];
+    size_t stored_len = 0;
+    char expected_hash[SHA256_HEX_LEN + 1];
+    char actual_hash[SHA256_HEX_LEN + 1];
+    char path[256];
+    psa_status_t status;
 
-    psa_status_t status = aes256_cbc_encrypt(encrypted, &encrypted_len,
-                                               (const unsigned char *)plaintext,
-                                               plaintext_len, key_id);
+    printf("=== 文件加密 + SHA-256 校验 + ZIP 打包测试 ===\n\n");
+
+    /* 1. 生成 origin.txt */
+    printf("[1/6] 生成 %s\n", ORIGIN_FILE);
+    if (write_file(ORIGIN_FILE, (const unsigned char *)origin_content,
+                   sizeof(origin_content) - 1) != 0)
+        return 0;
+    if (read_file(ORIGIN_FILE, plain, sizeof(plain), &plain_len) != 0)
+        return 0;
+    printf("  内容 (%zu 字节):\n", plain_len);
+    fwrite(plain, 1, plain_len, stdout);
+    print_hex("  hex", plain, plain_len);
+    printf("\n");
+
+    /* 2. 加密 → encrypt.bin */
+    printf("[2/6] AES-256-CBC 加密 → %s\n", ENCRYPT_FILE);
+    status = aes256_cbc_encrypt(encrypted, &encrypted_len,
+                                plain, plain_len, key_id);
     if (status != PSA_SUCCESS) {
         fprintf(stderr, "加密失败 (status=%ld)\n", (long)status);
         return 0;
     }
-
-    print_hex("IV", encrypted, 16);
-    print_hex("密文", encrypted + 16, encrypted_len - 16);
+    if (write_file(ENCRYPT_FILE, encrypted, encrypted_len) != 0)
+        return 0;
+    print_hex("  IV", encrypted, 16);
+    print_hex("  密文", encrypted + 16, encrypted_len - 16);
     printf("\n");
 
-    /* 解密 */
-    unsigned char decrypted[1024];
-    size_t decrypted_len = 0;
+    /* 3. 计算 SHA-256 → sha.txt */
+    printf("[3/6] SHA-256 计算 → %s\n", SHA_FILE);
+    if (sha256_hex(encrypted, encrypted_len,
+                   expected_hash, sizeof(expected_hash)) != 0)
+        return 0;
+    {
+        char line[SHA256_HEX_LEN + 2];
+        int len = snprintf(line, sizeof(line), "%s\n", expected_hash);
+        if (write_file(SHA_FILE, (const unsigned char *)line, (size_t)len) != 0)
+            return 0;
+    }
+    printf("  SHA-256: %s\n\n", expected_hash);
 
+    /* 4. 打包 public.zip（使用系统自带 bsdtar） */
+    printf("[4/6] 打包 → %s\n", ZIP_FILE);
+    if (run_command("tar -a -c -f " ZIP_FILE " "
+                    ENCRYPT_FILE " " SHA_FILE) != 0)
+        return 0;
+    printf("\n");
+
+    /* 5. 解包 public.zip → extract/ */
+    printf("[5/6] 解包 %s → %s/\n", ZIP_FILE, EXTRACT_DIR);
+    if (!CreateDirectoryA(EXTRACT_DIR, NULL) &&
+        GetLastError() != ERROR_ALREADY_EXISTS) {
+        fprintf(stderr, "创建目录 %s 失败\n", EXTRACT_DIR);
+        return 0;
+    }
+    if (run_command("tar -x -f " ZIP_FILE " -C " EXTRACT_DIR) != 0)
+        return 0;
+
+    /* 对解包出的 encrypt.bin 重新计算 SHA-256，与 sha.txt 比对 */
+    snprintf(path, sizeof(path), "%s/%s", EXTRACT_DIR, ENCRYPT_FILE);
+    if (read_file(path, extracted, sizeof(extracted), &extracted_len) != 0)
+        return 0;
+    if (sha256_hex(extracted, extracted_len,
+                   actual_hash, sizeof(actual_hash)) != 0)
+        return 0;
+
+    snprintf(path, sizeof(path), "%s/%s", EXTRACT_DIR, SHA_FILE);
+    if (read_file(path, stored_buf, sizeof(stored_buf) - 1, &stored_len) != 0)
+        return 0;
+    stored_buf[stored_len] = '\0';
+
+    printf("  解包密文 SHA-256: %s\n", actual_hash);
+    if (stored_len < SHA256_HEX_LEN) {
+        fprintf(stderr, "  sha.txt 内容过短 (%zu 字节)\n", stored_len);
+        pass = 0;
+    } else if (_strnicmp((const char *)stored_buf, actual_hash,
+                         SHA256_HEX_LEN) != 0) {
+        fprintf(stderr, "  完整性校验失败: sha.txt 与解包密文不匹配\n");
+        pass = 0;
+    } else {
+        printf("  完整性校验通过\n");
+    }
+    printf("\n");
+
+    /* 6. 解密还原 origin.txt */
+    printf("[6/6] 解密 → %s\n", RESTORED_FILE);
     status = aes256_cbc_decrypt(decrypted, &decrypted_len,
-                               encrypted, encrypted_len, key_id);
+                                extracted, extracted_len, key_id);
     if (status != PSA_SUCCESS) {
         fprintf(stderr, "解密失败 (status=%ld)\n", (long)status);
         return 0;
     }
+    if (write_file(RESTORED_FILE, decrypted, decrypted_len) != 0)
+        return 0;
 
-    if (decrypted_len < sizeof(decrypted))
-        decrypted[decrypted_len] = '\0';
-    else
-        decrypted[sizeof(decrypted) - 1] = '\0';
+    printf("  还原内容 (%zu 字节):\n", decrypted_len);
+    fwrite(decrypted, 1, decrypted_len, stdout);
+    print_hex("  hex", decrypted, decrypted_len);
 
-    print_hex("解密结果 (hex)", decrypted, decrypted_len);
-    printf("解密结果 (string): %s\n\n", (const char *)decrypted);
-
-    /* 验证 */
-    if (decrypted_len != plaintext_len) {
-        fprintf(stderr, "长度不匹配: decrypted_len=%zu, plaintext_len=%zu\n",
-                decrypted_len, plaintext_len);
+    /* 与 origin.txt 的原始内容比对 */
+    if (decrypted_len != plain_len) {
+        fprintf(stderr, "长度不匹配: decrypted_len=%zu, plain_len=%zu\n",
+                decrypted_len, plain_len);
         pass = 0;
-    } else if (memcmp(decrypted, plaintext, plaintext_len) != 0) {
+    } else if (memcmp(decrypted, plain, plain_len) != 0) {
         fprintf(stderr, "内容不匹配!\n");
         pass = 0;
     }
 
     if (pass) {
-        printf("[PASS] 加解密验证通过\n");
+        printf("[PASS] 加密 → 校验 → 打包 → 解包 → 还原 全流程通过\n");
     } else {
-        printf("[FAIL] 加解密验证失败\n");
+        printf("[FAIL] 流程验证失败\n");
     }
 
     return pass;
