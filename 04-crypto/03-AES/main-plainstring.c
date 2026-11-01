@@ -14,7 +14,7 @@
 /* ------------------------------------------------------------------ */
 #define KEY_SOURCE_DEFAULT 0        /* 内置 key_default（demo，开箱即用） */
 #define KEY_SOURCE_FILE    1        /* 从运行目录的 aes.key 加载         */
-#define KEY_SOURCE         KEY_SOURCE_FILE
+#define KEY_SOURCE         KEY_SOURCE_DEFAULT
 
 #if KEY_SOURCE != KEY_SOURCE_DEFAULT && KEY_SOURCE != KEY_SOURCE_FILE
 #error "KEY_SOURCE must be KEY_SOURCE_DEFAULT or KEY_SOURCE_FILE"
