@@ -7,7 +7,12 @@ install/
 # Key files (generated locally, not committed)
 keys/private.pem
 keys/public.pem
+keys/*.der
+keys/*.key
 !keys/.gitkeep
+
+# Debug data (generated locally by configure-test.py, not committed)
+data/
 
 # IDE
 .vs/
